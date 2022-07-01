@@ -1,0 +1,28 @@
+version: '3.7'
+
+# Define services
+services:
+  ubxlib_agent:
+    image: nexus-de-bln.u-blox.net:18001/ubxlib_docker:latest
+    restart: never
+    device_cgroup_rules:
+      - 'c 188:* rmw'
+      - 'c 189:* rmw'
+    environment:
+      SSH_AUTH_SOCK: '/run/user/keyring/ssh'
+      HOSTNAME: 'debug'
+      SDK_DIR: '/opt/sdks'
+    entrypoint: '/scripts/entrypoint.sh'
+    command: '-c "$DEV_COMMAND"'
+    volumes:
+      - './scripts:/scripts:ro'
+      - '/dev:/dev'
+      - '$HOME/sdks:/opt/sdks'
+      - '../../../../../../:/workdir/ubxlib'
+      - '$HOME:/home/ubxlib'
+      - '$SSH_AUTH_SOCK:/run/user/keyring/ssh'
+      - '../../../../../../_test_output:/workdir/_test_output'
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
+    ports:
+      - 17003:17003 # PyRPC

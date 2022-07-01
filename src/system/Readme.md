@@ -1,0 +1,7 @@
+# System Files
+In this folder files that have to do with the system in general are placed.
+These files inlcude:
+- x_pin_config.h: This file contains some NORA-B1 pin definitions not handled by the Zephyr Device tree in the [overlay file](../../nrf5340dk_nrf5340_cpuapp.overlay).These pins are connections between NORA-B1 and other ublox modules (SARA-R5, MAXM10S, NINA-W156)
+- x_logging.h/.c: Contains functions to handle Zephyr's logging system. This is mainly used to save and restore logger state, after ubxlib port deinitialization (ubxlib might interact with the logger at shutdown and lose its state, that is why we save the state before shutdown and then restore it).It also contains the log module names that can be changed according to user's liking
+- x_storage.h/.c: Contain function to handle internal storage of NORA-B1. In this memory WiFi credentials and MQTT(SN) configuration files are stored. These config files are retained after an update using a Serial bootloader, as long as the memory area is not affected by the update.
+- x_system_conf.h: Contains definitions of thread priorities and stack sizes of Zephyr application. It also holds the default sampling rates of sensors, and the sensor aggregation main functionality. Firmware version is defined in this file too.
