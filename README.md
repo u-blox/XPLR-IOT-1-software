@@ -82,7 +82,7 @@ nrfjprog –reset
 
 ![nrf connect programmer should be here.](/readme_images/nrfConnect_programmer.png "nrf connect programmer")
 
-> **NOTE:** Some early units have a misalignment between the SWD connector, J11, and the end panel. If a misalignment is observed, open the case, and move the end-panel so the opening is centered around the J11 prior to connecting a SWD cable.
+> **NOTE:** Some early units have a misalignment between the SWD connector, J11, and the end panel. If a misalignment is observed, open the case, and move the end-panel so the opening is centered around J11 prior to connecting an SWD cable.
 
 ### Programming the firmware using the Serial Bootloader
 XPLR-IOT-1 comes pre-flashed with a Serial Bootloader. This allows the device to be updated without the need of a programmer/debugger. If you erase the device, you need to re-program the bootloader in order to be able to use it (see [here](./compile_options/bootloader_inclusion))
