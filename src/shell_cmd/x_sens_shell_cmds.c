@@ -130,7 +130,7 @@ static void xSensCmdTypeStatus(const struct shell *shell, size_t argc, char **ar
 SHELL_STATIC_SUBCMD_SET_CREATE(BME280,
         SHELL_CMD(enable, NULL, "Enable BME280 measurements (set status to Running)", xSensBme280Enable),
         SHELL_CMD(disable,NULL, "Disable BME280 measurements (set status to Suspended)", xSensBme280Disable),
-        SHELL_CMD(set_period,NULL, "Set BME280 period in ms", xSensBme280SetUpdatePeriod),
+        SHELL_CMD(set_period,NULL, "Set BME280 period in ms", xSensBme280UpdatePeriodCmd),
         SHELL_CMD(publish,NULL, "Publish BME280 measurements: parameters on/off. Eg: publish on ", xSensBme280EnablePublishCmd),
         SHELL_SUBCMD_SET_END
 );

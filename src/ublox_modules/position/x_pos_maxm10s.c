@@ -298,9 +298,12 @@ static void gnssPosCallback(int32_t networkHandle,
 void xPosMaxM10ConfigPins(void){
     
     nrf_gpio_cfg_output((uint32_t) NORA_EN_MAX_PIN);
-    nrf_gpio_cfg_output((uint32_t) MAX_SAFEBOOT_PIN);
     nrf_gpio_cfg_output((uint32_t) MAX_BACKUP_EN_PIN);
     nrf_gpio_cfg_output((uint32_t) NORA_MAX_COM_EN_PIN);
+    nrf_gpio_cfg_output((uint32_t) MAX_SAFEBOOT_PIN);
+    
+    nrf_gpio_pin_clear((uint32_t) MAX_SAFEBOOT_PIN);
+
     gMaxStatus.pinsConfigured = true;
 }
 

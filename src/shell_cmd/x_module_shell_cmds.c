@@ -129,6 +129,8 @@ SHELL_STATIC_SUBCMD_SET_CREATE(NINAW156,
         SHELL_CMD(disconnect,NULL, "Disconnect from WiFi network", xWifiNinaDisconnect),
         SHELL_CMD(provision,NULL, "Provide WiFi network credentials: provision <SSID> <Password> : if open network do not provide <Password>", xWifiNinaProvisionCmd),
         SHELL_CMD(type_cred,NULL, "Type WiFi Network credentials (active/saved/provided for next setup)", xWifiNinaTypeNetworkParamsCmd),
+        SHELL_CMD(comm=nora,NULL, "Set NINAW156 serial comm: nora", xWifiNinaEnableNoraCom),
+        SHELL_CMD(comm=usb,NULL, "Set NINAW156 serial comm: usb", xWifiNinaDisableNoraCom),
         SHELL_SUBCMD_SET_END
 );
 

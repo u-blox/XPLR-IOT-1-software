@@ -515,6 +515,14 @@ void xWifiNinaConfigPins(void){
     nrf_gpio_cfg_output((uint32_t) NINA_RST_PIN);
     nrf_gpio_cfg_output((uint32_t) NINA_EN_PIN);
     nrf_gpio_cfg_output((uint32_t) NORA_NINA_COM_EN_PIN);
+
+    /* Nina also has two more pins connected:
+    *  - NINA_SW1_PIN
+    *  - NINA_SW2_PIN
+    *  Since these two pins are not used in this application
+    *  we do not configure them via this module.
+    */
+
     gNinaStatus.pinsConfigured = true;
 }
 
@@ -573,12 +581,20 @@ void xWifiNinaEnableNoraCom(void)
     // Select UARTE Comm, UART-BRIDGE comm de-select
     nrf_gpio_pin_set((uint32_t) NORA_NINA_COM_EN_PIN);
     gNinaStatus.com = SERIAL_COMM_NORA;
+
+    LOG_INF("Serial Com set to NORA\r\n");
 }
 
 
 
-void xWifiNinaDisableNoraCom(void)
+err_code xWifiNinaDisableNoraCom(void)
 {
+    if( gNinaStatus.uStatus >= uPortInitialized ){
+        LOG_ERR("Cannot Disable Nora Serial Com while ubxlib uses the module. Deinit NINA and try again\r\n");
+        return X_ERR_INVALID_STATE;
+    }
+
+
     if(! gNinaStatus.pinsConfigured){
         xWifiNinaConfigPins();
     }
@@ -586,6 +602,10 @@ void xWifiNinaDisableNoraCom(void)
     // Select UART-BRIDGE, disable UART comm between NORA and NINA
     nrf_gpio_pin_clear((uint32_t) NORA_NINA_COM_EN_PIN);
     gNinaStatus.com = SERIAL_COMM_USB2UART;
+
+    LOG_INF("Serial Com Set to UART to USB\r\n");
+
+    return X_ERR_SUCCESS;
 }
 
 

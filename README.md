@@ -1,7 +1,7 @@
 # XPLR-IOT-1-software
-This project is intented to be used with the XPLR-IOT-1 device from u-blox. Sensor Aggregation use case v0.2 is compatible with XPLR-IOT-1-00 (PCB Rev B version). More information about XPLR-IOT-1 hardware etc. can be found in the following link: [XPLR-IOT-1 quick start guide](https://developer.thingstream.io/guides/iot-communication-as-a-service/hardware/xplr-iot-1-quick-start-guide) 
+This project is intented to be used with the XPLR-IOT-1 device from u-blox. Sensor Aggregation use case v0.3 is compatible with XPLR-IOT-1-00 (PCB Rev B version). More information about XPLR-IOT-1 hardware etc. can be found in the following link: [XPLR-IOT-1 quick start guide](https://developer.thingstream.io/guides/iot-communication-as-a-service/hardware/xplr-iot-1-quick-start-guide) 
 
-XPLR-IOT-1 comes pre-flashed with the Sensor Aggregation Firmware (v0.2) along with a Serial Bootloader that allows firmware on the device to be updated without the need of a debugger/programmer.
+XPLR-IOT-1 comes pre-flashed with the Sensor Aggregation Firmware (v0.3) along with a Serial Bootloader that allows firmware on the device to be updated without the need of a debugger/programmer.
 
 This project contains the Sensor Aggregation Use Case example for XPLR-IOT-1 and future updates of this application will be uploaded here.
 
@@ -31,7 +31,12 @@ The main features of the application are:
 * 5. Allow handling of [ublox modules](./src/ublox_modules) via s-center, m-center, u-center by configuring their UARTs properly. Power up/down u-blox modules.
 * 6. Control Log messages
 
-The messages sent to Thingstream are compatible with pre-built flows which allow the use of user-hosted dashboard examples using Node Red
+The messages sent to Thingstream are compatible with pre-built flows which allow the use of user-hosted dashboard examples using Node Red.
+
+Secondary features of the application:
+* XPLR-IOT-1 can be scanned by an NFC-enabled device (mobile phone/tablet). Details [here](./src/ublox_modules/nfc/).
+* XPLR-IOT-1 imeplements BLE functionality for testing purposes. Details [here](./src/ublox_modules/ble/).
+
 
 More information on the functionality is provided in Readmes at the respective [source code](./src) folders
 
@@ -40,6 +45,8 @@ More information on the functionality is provided in Readmes at the respective [
 The XPLR-IOT-1 comes pre-programmed with the Sensor Aggregation firmware along with a Serial Bootloader to allow firmware updates without the use of a J-Link programmer/debugger.
 
 The example is build using **nRF Connect SDK version 1.7.0** and is advised to use this version to build the project in this repository.
+
+Compiled images of the project can be found in the [tools_and_compiled_images](./tools_and_compiled_images/) folder.
 
 ### Building  the firmware
 The firmware is based on Nordic’s nRF Connect SDK in a Zephyr RTOS environment. To be able to build it nRF Connect SDK should be installed in your PC (this will also install some necessary tools such as west). 
@@ -72,20 +79,33 @@ XPLR-IOT-1 can be programmed using a J-Link debugger. There are various options 
 
 ![vscode_flash should be here.](/readme_images/vscode_flash.png "VS Code Flash")
 
-2.	If you have [nrfjprog tools](https://www.nordicsemi.com/Products/Development-tools/nRF-Command-Line-Tools) installed, you can use commands in a command line to program the device:
+2.	If you have [nrfjprog tools](https://www.nordicsemi.com/Products/Development-tools/nRF-Command-Line-Tools) installed, you can use commands in a command line to program the device (in case  only App Core is used):
 ```	
 nrfjprog  --eraseall
 nrfjprog --program zephyr.hex --coprocessor CP_APPLICATION (where **zephyr.hex** is the appropriate hex file and also contains the filepath if necessary)
 nrfjprog –reset
 ```
-3.	The device can be programmed using [Nordic’s nRF Connect for Desktop](https://www.nordicsemi.com/Products/Development-tools/nRF-Connect-for-desktop) and more specifically the *Programmer app*. The device should be reset after programming.
+3. If Net Core is also used (like in this application), the procedure is a bit more complex:
+```	
+nrfjprog --recover --coprocessor CP_NETWORK
+nrfjprog --eraseall --coprocessor CP_NETWORK
+nrfjprog --eraseall --coprocessor CP_APPLICATION
+nrfjprog --recover --coprocessor CP_NETWORK
+nrfjprog --program net_core.hex --coprocessor CP_NETWORK
+nrfjprog --program app_core.hex --coprocessor CP_APPLICATION
+nrfjprog --reset
+```
+
+4.	The device can be programmed using [Nordic’s nRF Connect for Desktop](https://www.nordicsemi.com/Products/Development-tools/nRF-Connect-for-desktop) and more specifically the *Programmer app*. The device should be reset after programming.
 
 ![nrf connect programmer should be here.](/readme_images/nrfConnect_programmer.png "nrf connect programmer")
 
-> **NOTE:** Some early units have a misalignment between the SWD connector, J11, and the end panel. If a misalignment is observed, open the case, and move the end-panel so the opening is centered around J11 prior to connecting an SWD cable.
-
 ### Programming the firmware using the Serial Bootloader
 XPLR-IOT-1 comes pre-flashed with a Serial Bootloader. This allows the device to be updated without the need of a programmer/debugger. If you erase the device, you need to re-program the bootloader in order to be able to use it (see [here](./compile_options/bootloader_inclusion))
+
+To easily update the device using pre-compiled images, you can run the batch file in the [tools_and_compiled_images](./tools_and_compiled_images/) folder, following the instructions given in the same folder.
+
+##### If you don't want to run the batch script:
 
 In order to update the device using the Serial Bootloader it must be compiled using option 2 [compile an updateable image](./compile_options/updateable_image) from compile options.
 
@@ -101,15 +121,17 @@ The Serial Interface to be used is interface 0. Please find the correct COM port
 ![usbhub.png should be here.](./readme_images/usbhub.png "usbhub.png")
 
 
-In order to send the necessary command for update you need newtmgr.exe (find it in the [tools](./tools) folder):
+In order to send the necessary commands for update you need newtmgr.exe (find it in the [tools_and_compiled_images](./tools_and_compiled_images/) folder):
 ```
+newtmgr.exe --conntype serial --connstring "COM8,baud=115200" image upload signed_by_b0_app.bin
 newtmgr.exe --conntype serial --connstring "COM8,baud=115200" image upload app_update.bin
 ```
 Then reset the device or use the command:
 ```
 nrfjprog --reset
 ```
-**Side Note:** This application currently makes use of the APPLICATION core of NORA-B1 in XPLR-IOT-1. If you want to program the NET core also, you can use a similar command like the one provided here (using the appropriate file). In this case when you have NET core and APPLICATION core updates, please program the NET core first, then the APPLICATION core using two separate commands, and then reset the device.
+**Side Note:** This application currently uses both the APPLICATION and NET core of NORA-B1 in XPLR-IOT-1. In this case, please program the NET core first, then the APPLICATION core using two separate commands as described above, and then reset the device. If only the application core is used (e.g. you do not use BLE) then the first command to update the net core is not needed.
+About the file names used in the commands above, see [here](./compile_options/updateable_image/). Off course the filenames can be anything.
 
 
 ## Disclaimer

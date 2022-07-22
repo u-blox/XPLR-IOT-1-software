@@ -12,3 +12,12 @@ These modules have some following functions common:
 
 As the name suggests these functions power up/down the respective modules.
 Also, all these modules are handled using ubxlib library in the code. That creates some sort of dependency between the status of these modules.
+
+
+
+### Secondary u-blox Modules (NORA-B1)
+
+These are functions implemented in NORA-B1 module and their existence is not mandatory for the functionality of Sensor Aggregation Use Case application. They are just added for demonstration/testing purposes.
+
+-	[NFC Functionality](./nfc/) (handles NFC)
+-	[BLE Functionality](./ble/) (handles BLE)

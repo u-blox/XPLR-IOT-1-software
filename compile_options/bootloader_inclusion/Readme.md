@@ -10,7 +10,11 @@ The script file in this folder:
 
 Just run the script and build the project.
 
-This allows the build of an application image that also contains the bootloader. After you build the project you can navigate to your build folder, and find the **build/zephyr/merged_domains.hex** file created. This is the hex file you can use to program your device with a J-Link programmer.
+This allows the build of an application image that also contains the bootloader. After you build the project you can navigate to your build folder, and find the **build/zephyr/merged_domains.hex** file created. This is the hex file you can use to program your device with a J-Link programmer via the nRF Connect-> Programmer application.
+
+**Note**: If you want to use nrfjprog commands, instead of the nRF Connect -> Programmer application, different files are needed from the build folder, since you need to program each core separately.
+
+The compiled image from this build configuration can be found [here](./tools_and_compiled_images/hex_files/SensorAggregation_v0.3_Bootloader_MergedCores.hex)
 
 ## Bootloader Information
 

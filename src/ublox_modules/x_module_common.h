@@ -37,7 +37,8 @@
  * -------------------------------------------------------------- */
 
 
-/** Enum type that describes the ubxlib status of Cellular or Wifi module
+/** Enum type that describes the ubxlib status of Cellular or Wifi module.
+ *  The order of elements in this enum should not be changed
  */
 typedef enum{
     uPortNotInitialized,    /**< Ubxlib port not initilized for Zephyr */

@@ -110,8 +110,10 @@ void xWifiNinaEnableNoraCom(void);
 
 /** Disables NORA - NINA-W156 Uart communication. Enables NINA-W156 UART to USB
  * communication
+ * 
+ * @return  zero on success or negative error code
  */
-void xWifiNinaDisableNoraCom(void);
+err_code xWifiNinaDisableNoraCom(void);
 
 /** Asserts Reset Pin of NINA-W156
  */

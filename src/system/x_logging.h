@@ -61,6 +61,10 @@
 #define LOGMOD_NAME_SARAR5          saraR5_app
 #define LOGMOD_NAME_WIFI_MQTT       mqtt_app
 #define LOGMOD_NAME_CELL_MQTTSN     mqttSN_app
+#define LOGMOD_NAME_BLE             ble_app
+
+
+#define LOGMOD_NAME_NFC             nfc_app
 
 //Logging module names of other modules
 #define LOGMOD_NAME_STORAGE         storage_app

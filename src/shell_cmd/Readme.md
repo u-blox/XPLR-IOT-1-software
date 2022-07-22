@@ -114,6 +114,8 @@ Commands to handle NINA-W156
 |modules NINAW156 disconnect|modules NINAW156 disconnect|Disconnects from a wifi network|
 |modules NINAW156 provision "SSID" "optional:password"|modules NINAW156 provision open_network_name/ modules NINAW156 provision net_name pass12323|The command to provide the SSID and password of a WiFi network. If a password is not provided, the network is considered an open network|
 |modules NINAW156 type_cred|modules NINAW156 type_cred|Types the saved and active WiFi network credentials saved|
+|modules NINAW156 comm=nora|modules NINAW156 comm=nora|Connects the NINAW156 uart serial output to NORA-B1 (which runs this firmware). This is essential in order for the firmware to be able to control the NINA module|
+modules NINAW156 comm=usb|modules NINAW156 comm=usb|Used only if the user want to connect to the uart of NINAW156 through a terminal from his PC, or if he wants to use NINAW156 with s-center. If the usb comm is selected the firmware cannot control NINAW156 (it can only power it on/off)
 
 ##### SARA-R5 commands
 Commands to handle SARA-R5

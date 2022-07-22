@@ -27,7 +27,7 @@
 
 
 #define FIRMWARE_VERSION_MAJOR    0
-#define FIRMWARE_VERSION_MINOR    2
+#define FIRMWARE_VERSION_MINOR    3
 
 
 // Sensor Threads

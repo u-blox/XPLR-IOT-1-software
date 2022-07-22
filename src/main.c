@@ -38,6 +38,8 @@
 #include "x_pos_maxm10s.h"
 #include "x_wifi_ninaW156.h"
 #include "x_cell_saraR5.h"
+#include "x_nfc.h"
+#include "x_ble.h"
 
 #include "x_storage.h"
 #include "x_button.h"
@@ -46,9 +48,13 @@
 #include "x_logging.h"
 
 
+
 // Just initialization processes
 void main(void)
 {
+
+	// Reclaim pins assigned to Net core for use with App core
+	xPinConfReclaimNetCorePins();
 
 	//Initialize sensors
 	xSensBme280Init();
@@ -84,6 +90,12 @@ void main(void)
 		;
 	}
 	xLogStartupConfig();
-	
+
+	// BLE Functionality
+	xBleInit();
+
+	// MFC Functionality
+	xNfcConfig();
+	xNfcInit();
 }
 

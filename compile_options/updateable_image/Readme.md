@@ -10,4 +10,8 @@ The script file in this folder:
 
 Just run the script and build the project.
 
-This allows the build of an updateable application image. After you build the project you can navigate to your build folder, and find the **build/zephyr/app_update.bin** file created. This is the bin file you can use to update your device's firmware using the serial bootloader.
+This allows the build of an updateable application image. After you build the project you can navigate to your build folder, and find the:
+* **build/hci_rpmsg/zephyr/signed_by_b0_app.bin** file created. This file contains the updateable image for the Net Core of NORA-B1.
+* **build/zephyr/app_update.bin** file created. This file contains the updateable image for the Application Core of NORA-B1.
+
+In order to use them **FIRST update the Net Core and THEN the Application Core** using the newtmgr.exe tool in [tools_and_compiled_images](./tools_and_compiled_images/) folder (check the batch script file in that folder to see how you can update your device. The bin files in that folder are the same mentioned here, they are just renamed).

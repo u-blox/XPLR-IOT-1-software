@@ -528,6 +528,10 @@ void xCellSaraConfigPins(void){
     nrf_gpio_cfg_output((uint32_t) NORA_EN_SARA_PIN);
     nrf_gpio_cfg_output((uint32_t) SARA_PWR_ON_PIN);
     nrf_gpio_cfg_output((uint32_t) SARA_RST_PIN);
+    nrf_gpio_cfg_output((uint32_t) SARA_INT_PIN);
+
+    nrf_gpio_pin_clear((uint32_t) SARA_INT_PIN);
+
     gSaraStatus.pinsConfigured = true;
     LOG_INF("ouput pins configured \r\n");
 

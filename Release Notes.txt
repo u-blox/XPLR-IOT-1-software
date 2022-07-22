@@ -1,0 +1,12 @@
+v0.3 -- 20/07/2022
+- Added BLE basic functionality for Testing with NUS service.
+- Added NFC basic functionality for testing.
+- Added Serial Com Selection command for NINA-W156 module
+- Bug Fix: SARA-R5 remains always on. Proper Handling of SARA pins
+- Bug Fix: NINA-W156 proper handling of pins.
+- Bug Fix: Fixed an issue in BME280 set_period command 
+
+
+
+v0.2
+- Initial Release of Sensor Aggregation Use Case
