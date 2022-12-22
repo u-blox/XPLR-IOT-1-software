@@ -5,9 +5,11 @@ The firmware provides two main modes of operation:
   * Cellular
 * 2.Sensor Aggregation Custom Functionality
 
-The first mode is an easy way to send all sensor data in Thningstream. Only some initial configuration in needed (see [wifi](./ublox_modules/wifi)) and then with a simple command or button press the device performs all necessary actions.
+The first mode is an easy way to send all sensor data in Thningstream. Only some initial configuration is needed (see [wifi](./ublox_modules/wifi)) and then with a simple command or button press the device performs all necessary actions.
 
-The second mode allows for more flexibility and the user can experiment with the XPLR-IOT-1. It is also useful to understand how the application and the libraries used work.
+The second mode allows for more flexibility and the user can experiment with the XPLR-IOT-1. It is also useful to understand how the application and the libraries used work. This mode does not have a standard way of operation, it is controlled by using the appropriate [commands](./shell_cmd/).
+
+*Note:* When using custom functionality mode be sure to check some known issues and restrictions (described in [commands](./shell_cmd/) section).
 
 ## Sensor Aggregation Main Functionality
 
@@ -24,6 +26,7 @@ In this mode all sensor data are published in a single message at a single topic
 
 ##### Failure
 If something goes wrong during the setup of this mode (e.g., cannot connect to network or Thingstream platform) the device will reverse any configuration made up to this point (e.g., close Wi-Fi, deinitialize modules etc.) and will exit the mode. In case of failure during the configuration, the mode exits and the user has to explicitly activate the mode again (the device does not try to connect again, automatically).
+
 
 ![SenAggGeneral.jpg.](../readme_images/SenAggGeneral.jpg "SenAggGeneral.jpg")
 

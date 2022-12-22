@@ -26,6 +26,7 @@
 #include "x_sensor_aggregation_function.h"
 #include "x_led.h"
 #include "x_system_conf.h"
+#include "mobile_app_ble_protocol.h"
 
 
 
@@ -36,7 +37,14 @@
 
 void xFirmwareVersionType(const struct shell *shell, size_t argc, char **argv){
 
-       shell_print(shell, "Firmware Version: %d.%d\r\n", FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR );
+       shell_print(shell, "\r\nFirmware Version: %d.%d", FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR );
+       
+       // If this is an internal version, type the internal version too
+       if( FIRMWARE_VERSION_INTERNAL != 0 ){
+           shell_print(shell, "Internal Version: %d", FIRMWARE_VERSION_INTERNAL );
+       }
+
+       shell_print(shell, "BLE mobile app communication protocol Version: %d.%d", M_BLE_PROT_VERSION_MAJOR, M_BLE_PROT_VERSION_MINOR );
 }
 
 /* ----------------------------------------------------------------

@@ -75,19 +75,7 @@
 #include <hal/nrf_gpio.h>
 
 // ubxlib related includes
-#include "u_cfg_app_platform_specific.h"
-
-#include "u_port.h"
-#include "u_port_debug.h"
-
-#include "u_error_common.h"
-#include "u_port_uart.h"
-
-#include "u_gnss_module_type.h"
-#include "u_gnss_type.h"
-#include "u_gnss.h"
-#include "u_gnss_pwr.h"
-#include "u_gnss_pos.h"
+#include "ubxlib.h"
 
 // Sensor Aggegation specific includes
 #include "x_pin_conf.h"
@@ -124,10 +112,10 @@
 void maxM10PositionRequestStartThread(void);
 
 
-/** Callback controlled by ubxlib. This callback is generated after a position
-* request, when MaxM10 has a position fix to report.
+/** Callback controlled by ubxlib. This callback is triggered after a 
+ *  Position Request Start, when MaxM10 has a position fix to report.
 */
-static void gnssPosCallback(int32_t networkHandle,
+static void gnssPosCallback(uDeviceHandle_t devHandle,
                             int32_t errorCode,
                             int32_t latitudeX1e7,
                             int32_t longitudeX1e7,
@@ -155,19 +143,6 @@ void maxM10PositionTimeoutHandler(struct k_timer *dummy);
 /** Function to be called, when an error occurs.
 */
 static void maxM10ErrorHandle(void);
-
-/** this is a Callback function which is trigerred after a Position Request Start, when the
-* MaxM10S responds.
-*/
-static void gnssPosCallback(int32_t networkHandle,
-                            int32_t errorCode,
-                            int32_t latitudeX1e7,
-                            int32_t longitudeX1e7,
-                            int32_t altitudeMillimetres,
-                            int32_t radiusMillimetres,
-                            int32_t speedMillimetresPerSecond,
-                            int32_t svs,
-                            int64_t timeUtc);
 
 
 /* ----------------------------------------------------------------
@@ -225,7 +200,7 @@ int32_t gUartHandle;
 
 /** Gnss handler. Provides access via ubxlib
  */
-int32_t gGnssHandle;
+uDeviceHandle_t gGnssHandle = NULL;
 
 /** Hold gnss Latitude, Longitude results from MaxMax10 
  */
@@ -234,9 +209,6 @@ int32_t gLatitudeX1e7, gLongitudeX1e7;
 /** Flag to indicate whether a gnss position request is active via ubxlib
  */
 static bool gubxlibGnssRequestActive = false;
-
-
-//struct k_sem RequestCompleteSemaphore;
 
 
 // Packet that holds gnss position request results
@@ -266,7 +238,7 @@ xDataPacket_t MaxM10Pack = {
  * -------------------------------------------------------------- */
 
 
-static void gnssPosCallback(int32_t networkHandle,
+static void gnssPosCallback(uDeviceHandle_t devHandle,
                             int32_t errorCode,
                             int32_t latitudeX1e7,
                             int32_t longitudeX1e7,
@@ -420,6 +392,8 @@ err_code xPosMaxM10Init(void){
 
     err_code err;
 
+    k_thread_system_pool_assign(k_current_get());
+
     if( !xCommonUPortIsInit() ){
         LOG_WRN("ubxlib port not initialized. Initializing now \r\n");
         err = xCommonUPortInit();
@@ -439,13 +413,13 @@ err_code xPosMaxM10Init(void){
 
     uGnssInit();   
 
-    gUartHandle = uPortUartOpen(U_CFG_APP_GNSS_UART,
-                               U_GNSS_UART_BAUD_RATE, NULL,
+    gUartHandle = uPortUartOpen(MAX_UART,
+                               MAX_UART_BAUDRATE, NULL,
                                U_GNSS_UART_BUFFER_LENGTH_BYTES,
-                               U_CFG_APP_PIN_GNSS_TXD,
-                               U_CFG_APP_PIN_GNSS_RXD,
-                               U_CFG_APP_PIN_GNSS_CTS,
-                               U_CFG_APP_PIN_GNSS_RTS);
+                               -1,
+                               -1,
+                               -1,
+                               -1);
 
     if( gUartHandle < 0 ){
         LOG_ERR("Could not open GNSS Uart port\r\n");
@@ -456,21 +430,19 @@ err_code xPosMaxM10Init(void){
     uGnssTransportHandle_t GnssUartHandle;
     GnssUartHandle.uart = gUartHandle;
 
-    gGnssHandle = uGnssAdd(U_GNSS_MODULE_TYPE_M8,
-                          U_GNSS_TRANSPORT_NMEA_UART, GnssUartHandle,
-                          U_CFG_APP_PIN_GNSS_ENABLE_POWER, false);
+    err = uGnssAdd(U_GNSS_MODULE_TYPE_M8,
+                   U_GNSS_TRANSPORT_NMEA_UART, GnssUartHandle,
+                   MAX_ENABLE_POWER, false, &gGnssHandle);
+
+    if( err < X_ERR_SUCCESS ){
+        LOG_ERR("Could not add GNSS Instance. Err: %d\r\n", err );
+        return err;
+    }
 
     uGnssSetUbxMessagePrint(gGnssHandle, false);
 
-     if ( (err = uGnssPwrOn(gGnssHandle) ) == 0) {
-        LOG_INF("Initialized\r\n");
-        gMaxStatus.isUbxInit = true;
-         //uGnssPwrOff(gGnssHandle);
-    }
-    else{
-        LOG_ERR("Could not initialize\r\n");
-        xPosMaxM10Deinit();
-    }
+    LOG_INF("Initialized\r\n");
+    gMaxStatus.isUbxInit = true;
 
     return err;
 

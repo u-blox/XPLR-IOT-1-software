@@ -1,8 +1,0 @@
-{
-    "verbose": true,
-    "logging": false,
-    "secure-connection": true,
-    "server-port": "5060",
-    "server-certificate-location": "./certs/server_cert.pem",
-    "server-key-location": "./certs/server_key.pem"
-}

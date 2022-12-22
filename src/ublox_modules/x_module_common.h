@@ -43,8 +43,8 @@
 typedef enum{
     uPortNotInitialized,    /**< Ubxlib port not initilized for Zephyr */
     uPortInitialized,       /**< Ubxlib port intialized for use with Zephyr */
-    uNetInitialized,        /**< Ubxlib network initialized (either cell/wifi) */
-    uNetAdded               /**< Ubxlib network added (either cell/wifi) */
+    uDeviceApiInitialized,  /**< Ubxlib Device API initialized (refers to uDeviceInit) */
+    uDeviceOpened           /**< Ubxlib Device opened (refers to uDeviceOpen) */
 }ubxStatus_t;
 
 

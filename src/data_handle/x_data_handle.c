@@ -248,13 +248,10 @@ static int32_t xDataPrepareSingleSensorMsg( xDataPacket_t sensor_data_packet ){
         case bme280_t:  strcpy(gpTopicNameStr,TOPIC_NAME_BME280);
                         strcpy(gpTopicAliasStr,TOPIC_ALIAS_BME280);
                         break;
+                        
         
-        case adxl345_t: strcpy(gpTopicNameStr,TOPIC_NAME_ADXL345);
-                        strcpy(gpTopicAliasStr,TOPIC_ALIAS_ADXL345);
-                        break;
-        
-        case bq27421_t: strcpy(gpTopicNameStr,TOPIC_NAME_BQ27421);
-                        strcpy(gpTopicAliasStr,TOPIC_ALIAS_BQ27421);
+        case battery_gauge_t: strcpy(gpTopicNameStr,TOPIC_NAME_BQ27520);
+                        strcpy(gpTopicAliasStr,TOPIC_ALIAS_BQ27520);
                         break;
         
          
@@ -272,8 +269,8 @@ static int32_t xDataPrepareSingleSensorMsg( xDataPacket_t sensor_data_packet ){
                        break;
         
         
-        case fxas21002_t: strcpy(gpTopicNameStr,TOPIC_NAME_FXAS21002);
-                          strcpy(gpTopicAliasStr,TOPIC_ALIAS_FXAS21002);
+        case icg20330_t: strcpy(gpTopicNameStr,TOPIC_NAME_ICG20330);
+                          strcpy(gpTopicAliasStr,TOPIC_ALIAS_ICG20330);
                           break;
         
         case maxm10_t: strcpy(gpTopicNameStr,TOPIC_NAME_MAXM10S);
@@ -483,7 +480,6 @@ void xDataResetSensorAggregationMsg(void){
 
 void xDataSend(xDataPacket_t sensor_data_packet){
 
-    
     xSensorAggregationMode_t mode = xSensorAggregationGetMode();
 
     // if sensor aggregation mode is not enabled, sensors
@@ -516,6 +512,7 @@ void xDataSend(xDataPacket_t sensor_data_packet){
     //LOG_DBG("%s\r\n",pMessage);
     LOG_DBG("Send Message\r\n");
 
+    err_code err = X_ERR_SUCCESS;
     //Set quality of service and retain
     uint8_t qos = 0;
     bool retain = false;
@@ -525,20 +522,30 @@ void xDataSend(xDataPacket_t sensor_data_packet){
     xClientStatus_t mqttsn_status = xCellMqttSnClientGetStatus();
 
     if( mqtt_status.status == ClientConnected ){ 
-        xWifiMqttClientPublish(gpTopicNameStr, pMessage, strlen(pMessage), qos, retain);
+        err = xWifiMqttClientPublish(gpTopicNameStr, pMessage, strlen(pMessage), qos, retain);
     }
     else if(mqttsn_status == ClientConnected){
-        int32_t ret = xCellMqttSnClientPublish( MQTTSN_TOPIC_PREDEFINED,
-            gpTopicAliasStr, pMessage, strlen(pMessage), qos, retain);
 
-        if( ret != 0 ){
-            LOG_ERR("Publish error %d \r\n", ret);
+        uMqttSnTopicName_t topicName;
+        uint16_t alias = atoi(gpTopicAliasStr);
+        if ( ( err =  uMqttClientSnSetTopicIdPredefined(alias, &topicName) ) != U_ERROR_COMMON_SUCCESS ){
+            LOG_ERR("Error in uMqttClientSnSetTopicIdPredefined: %d\r\n", err);
+            return;    
         }
+
+        err = xCellMqttSnClientPublish( &topicName, pMessage, 
+                                        strlen(pMessage), qos, retain);
     }
     // no client is connected, cannot send data
     else{
-        LOG_ERR("Could not send data\r\n");
+        LOG_ERR("Could not send data: mqtt(sn) connection issue\r\n");
     }
+
+    // check publish errors from xCellMqttSnClientPublish
+    if( err != X_ERR_SUCCESS ){
+        LOG_ERR("Publish error %d \r\n", err);
+    }
+
     xDataResetSensorAggregationMsg();
 }
 

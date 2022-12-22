@@ -67,12 +67,14 @@
  * MQTT-SN MODULE DEFINITIONS
  * -------------------------------------------------------------- */
 
+/** Max String Length of the Broker name string (can be changed according to needs)*/
+#define MQTTSN_BROKER_NAME_MAXLEN         300
 /** Max String Length of a topic name (can be changed according to needs)*/
 #define MMQTTNS_TOPIC_MAXLEN              200
 /** Max String Length of a Client ID (can be changed according to needs)*/
-#define MQTTSN_CLIENT_ID_MAXLEN            200
+#define MQTTSN_CLIENT_ID_MAXLEN           200
 /** Max String Length of Connection Duration*/
-#define MQTTSN_CON_DURATION_STR_MAXLEN     15  // max 2^32 consists of 10 digits + 3 dots + termination char = 14
+#define MQTTSN_CON_DURATION_STR_MAXLEN    15  // max 2^32 consists of 10 digits + 3 dots + termination char = 14
 
 
 /* ----------------------------------------------------------------
@@ -123,36 +125,15 @@
  * TYPE DEFINITIONS
  * -------------------------------------------------------------- */
 
-/** Enum for MQTT-SN Quality of Service (QoS)
-*/
-typedef enum {
-    U_MQTTSN_QOS_AT_MOST_ONCE = 0,
-    U_MQTTSN_QOS_AT_LEAST_ONCE = 1,
-    U_MQTTSN_QOS_EXACTLY_ONCE = 2,
-    U_MQTTSN_QOS_SPECIAL = 3,      /**< Connectionless Mqtt-SN (-1)*/
-    U_MQTTSN_QOS_MAX_NUM           /**< used only for sanity checks*/
-} uMqttSNQos_t;
-
-
-/** Enum for MQT-SN Supported Topic Types
-*/
-typedef enum{
-    MQTTSN_TOPIC_NORMAL=0,
-    MQTTSN_TOPIC_PREDEFINED=1,
-    MQTTSN_TOPIC_SHORT=2,
-    MQTTSN_TOPIC_MAX_NUM       /**< used only for sanity checks*/
-}uMqttSNTopicType_t;
-
-
 /** Structure used to hold Mqtt-SN configuration that is saved in
  * the memory. This by no means is a complete Mqtt-Sn configuration,
  * it is only useful within the context of Sensor Agregation use case
  * of XPLR-IOT-1
 */
 typedef struct{
-    xCellMqttSnPlan_t plan;                     /**< Plan to which this configuration refers*/
+    xCellMqttSnPlan_t plan;                  /**< Plan to which this configuration refers*/
     char clientID[MQTTSN_CLIENT_ID_MAXLEN];  /**< Client ID*/
-    uint32_t con_duration;                  /**< Connection Duration*/
+    uint32_t con_duration;                   /**< Connection Duration*/
 }xCellMqttSnConfig_t;
 
 
@@ -248,8 +229,16 @@ err_code xCellMqttSnGetLastOperationResult(void);
  * 
  * @return        zero on success else negative error code.
  */
-err_code xCellMqttSnClientPublish( uMqttSNTopicType_t topic_type, const char *pTopicNameStr, const char *pMessage, size_t messageSizeBytes, uMqttSNQos_t qos,  bool retain);
+err_code xCellMqttSnClientPublish( const uMqttSnTopicName_t *pTopicName,
+                                   const char *pMessage,
+                                   size_t messageSizeBytes,
+                                   uMqttQos_t qos, bool retain);
 
+/** Delete any MQTT-Anywhere Configuration (MqttSn)
+ *
+ * @return        zero on success else negative error code.
+ */
+err_code xCellMqttSnDeleteAnywhereConfig( void );
 
 
 /* ----------------------------------------------------------------
@@ -303,6 +292,7 @@ void xCellMqttSnClientStatusCmd(const struct shell *shell, size_t argc, char **a
  * @param argv   the array including the parameters themselves.
  */
 void xCellMqttSnSendCmd(const struct shell *shell, size_t argc, char **argv);
+
 
 
 

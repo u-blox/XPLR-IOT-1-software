@@ -26,7 +26,7 @@
  *   and powers off the module
  * 
  *  Some additional configuration may be needed when connecting for the first
- *  form a new location. This is especially true when MQTT Flex is used 
+ *  from a new location. This is especially true when MQTT Flex is used 
  *  (see xCellSaraInit)
  * 
  */
@@ -35,6 +35,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <shell/shell.h>
+
+#include "ubxlib.h"  //for uDeviceHandle_t type
 
 #include "x_errno.h"
 #include "x_module_common.h"
@@ -50,9 +52,16 @@
 // Should be an xCellMqttSnPlan_t value
 #define MQTTSN_DEFAULT_PLAN  ANYWHERE   
 
-/** Timeout for uNetworkDown() to return (milliseconds) */
-#define NETWORK_DOWN_TIMEOUT    20000  
+// APN that should be used with Thingstream Cards, to connect to MQTT
+// Anywhere service
+#define CELL_APN_ANYWHERE    "TSUDP"
 
+// APN that should be used with a 3rd party card (this one is set up for 1nce
+// SIM cards), to connect to MQTT Flex service
+#define CELL_APN_FLEX        "iot.1nce.net"
+
+// After how many seconds a connection attempt should be aborted
+#define CELL_CONNECTION_TIMEOUT    120  // seconds
 
 
 /* ----------------------------------------------------------------
@@ -96,10 +105,11 @@ void xCellSaraConfigPins(void);
  */
 void xCellSaraPowerOn(void);
 
-/** Just powers down SARA-R5 module
+
+/** Just powers down SARA-R5 module.
+ * Does not issue AT+CPWROFF command, before shutting down
  * 
- * Prerequisites: SARA-R5 should not be initialized. Does not
- * deinitialize the module automatically
+ * Prerequisites: SARA-R5 should not be initialized with ubxlib. 
  */
 err_code xCellSaraPowerOff(void);
 
@@ -128,8 +138,8 @@ err_code xCellSaraPowerOff(void);
 void xCellSaraInit(void);
 
 
-/** Disconnectes the Cellular module and deinitializes any ubxlib configuration,
- *  so the module cannot be used by ubxlib anymore. It also power down the module.
+/** Disconnects the Cellular module and deinitializes any ubxlib configuration,
+ *  so the module cannot be used by ubxlib anymore. It also (gracefully) powers down the module.
  * 
  * Side Effects:
  * - 1. This function also deinitializes other modules used by ubxlib such as mqtt and MAXM10S.
@@ -150,12 +160,11 @@ void xCellSaraConnect(void);
 
 /** Should be used after xCellSaraInit(). Returns a handle to the initialized/added
  * network. This handle can be used with ubxlib functions that require a
- * network handle as a parameter. 
+ * Device handle as a parameter. 
  *
- * @return        A negative value is an error code (should not be used with other ubxlib functions).
- *                Other values are the actual Handle.
+ * @return        The Cellular device handle or NULL.
  */
-int32_t xCellSaraGetHandle(void);
+uDeviceHandle_t xCellSaraGetHandle(void);
 
 
 /** Get SARA module current status.
@@ -192,10 +201,11 @@ void xCellSaraActivateMqttAnywherePlan(void);
 xCellMqttSnPlan_t xCellSaraGetActiveMqttPlan(void);
 
 
-/** Used by the application to deinitialize a network in ubxlib library.
- * Normally not to be used by the user.
+/** Used by the application to deinitialize/close the cellular device in ubxlib library.
+ *  Also deinitializes Device API in ubxlib
+ *  Normally not to be used by the user.
  */
-void xCellSaraNetworkDeinit(void);
+void xCellSaraDeviceClose(void);
 
 
 /* ----------------------------------------------------------------

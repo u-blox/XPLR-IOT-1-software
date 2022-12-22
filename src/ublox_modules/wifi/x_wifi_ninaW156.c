@@ -59,14 +59,12 @@
 #include <hal/nrf_gpio.h>
 #include <logging/log.h>
 
-#include "u_short_range_module_type.h"
-#include "u_network.h"
-#include "u_network_config_wifi.h"
+//#include "ubxlib.h"      //--> included by the header
 
 #include "x_logging.h"
 #include "x_storage.h"
 #include "x_system_conf.h"
-#include "x_wifi_mqtt.h" // to control automatic disconnections/connections
+#include "x_wifi_mqtt.h"   // to control automatic disconnections/connections
 #include "x_led.h"
 #include "x_cell_saraR5.h"
 #include "x_pin_conf.h"
@@ -91,7 +89,6 @@ void xWifiNinaConnectThread(void);
 /** Thread called by xWifiPowerOff to deinitialize and power off the NINA module */
 void xWifiNinaPowerOffThread(void);
 
-
 /** Checks if provided credentials are valid (min/max length, security type).
  *
  * @param creds  The credentials to be checked.
@@ -99,18 +96,25 @@ void xWifiNinaPowerOffThread(void);
  */
 static bool NinaIsCredentialsValid( xWifiCredentials_t creds );
 
-
 /** Reset the given credentials structure (render them invalid)
  *
  * @param creds  The credentials to be reset
  */
-static void NinaResetCredentials( xWifiCredentials_t creds );
-
-
+static void NinaResetCredentials( xWifiCredentials_t *creds );
 
 /** Handle error happening in a thread
+ * 
+ * @param err_code The error code to handle
 */
 static void NinaErrorHandle(err_code err_code);
+
+
+/** Callback Function for handling a scan result entry.
+ * IMPORTANT: the callback will be called while the AT lock is held
+ * hence you are not allowed to call other u-blox
+ * module APIs directly from this callback.
+ */
+static void uWifiScanResultCallback(uDeviceHandle_t devHandle, uWifiScanResult_t *pResult);
 
 
 /* ----------------------------------------------------------------
@@ -169,9 +173,47 @@ xWifiNinaStatus_t gNinaStatus = {
 };
 
 
-/** Network Handle returned and used by ubxlib functions */
-static int32_t gNetHandle;
+/** Device Handle returned and used by ubxlib functions */
+static uDeviceHandle_t gDevHandle = NULL;
 
+/** Structure to hold the networks found from a WiFi network Scan command
+ * It has a max number of results it can hold. If results are more, then the 
+ * additional results are not saved and bool maxResultsExceeded is  set to true
+*/
+struct {
+    uWifiScanResult_t networks[WIFI_SCAN_RESULTS_BUF_SIZE];  /**< Buffer which holds the results */  
+    uint8_t networksNum;                                     /**< Number of networks found on a scan action */
+    bool maxResultsExceeded;                                 /**< True if results were more than the structure can hold */
+} gScannedNetworks;
+
+
+
+/* ----------------------------------------------------------------
+ * CALLBACK FUNCTION IMPLEMENTATION
+ * -------------------------------------------------------------- */
+
+
+static void uWifiScanResultCallback(uDeviceHandle_t devHandle, uWifiScanResult_t *pResult){
+
+    // sometimes there are results with a blank SSID as in the following example:
+    // (from module URC) +UWSCAN:D807B6855E2E,1,"",4,-69,18,8,8
+    // These results can cause problems later, while typing or sending the results via BLE
+    // There is no particular meaning in keeping them anyway in the context of this application
+    if( strlen( pResult->ssid ) == 0 ){
+        // just ignore results with blank SSID
+        return;
+    }
+
+    // if maximum number of results has been reached, discard the result
+    if( gScannedNetworks.networksNum == WIFI_SCAN_RESULTS_BUF_SIZE ){
+        gScannedNetworks.maxResultsExceeded = true;
+        return;
+    }
+    
+    // add the found network to the list of found networks
+    gScannedNetworks.networks[ gScannedNetworks.networksNum++ ] = *pResult;
+
+}
 
 
 /* ----------------------------------------------------------------
@@ -201,9 +243,12 @@ static bool NinaIsCredentialsValid( xWifiCredentials_t creds ){
     if( strlen( creds.SSIDstr ) < WIFI_MIN_SSID_LEN ){
         return false;
     }
-
-    if( strlen( creds.PSWstr ) < WIFI_MIN_PSW_LEN ){
-        return false;     
+    
+    //check password only if security type is not open network (1)
+    if( creds.sec_type == 2 ){
+        if( strlen( creds.PSWstr ) < WIFI_MIN_PSW_LEN ){
+            return false;     
+        }
     }
 
     return true;
@@ -211,13 +256,13 @@ static bool NinaIsCredentialsValid( xWifiCredentials_t creds ){
 
 
 
-static void NinaResetCredentials( xWifiCredentials_t creds ){
+static void NinaResetCredentials( xWifiCredentials_t *creds ){
 
     // These are set to values so that NinaIsCredentialsValid() fails
     // if creds are checked after this function is called
-    creds.sec_type = 0;
-    memset( creds.SSIDstr, 0 , WIFI_MAX_SSID_LEN );
-    memset( creds.PSWstr, 0 , WIFI_MAX_PSW_LEN );
+    creds->sec_type = 0;
+    memset( creds->SSIDstr, 0 , WIFI_MAX_SSID_LEN );
+    memset( creds->PSWstr, 0 , WIFI_MAX_PSW_LEN );
     return;
 }
 
@@ -227,6 +272,27 @@ void xWifiNinaInitThread(void){
 
     err_code err;
 
+    //ubxlib Device configuration
+    static const uDeviceCfg_t deviceCfg = {
+        .deviceType = U_DEVICE_TYPE_SHORT_RANGE,
+        .deviceCfg = {
+            .cfgSho = {
+                .moduleType = U_SHORT_RANGE_MODULE_TYPE_NINA_W15
+            }
+        },
+        .transportType = U_DEVICE_TRANSPORT_TYPE_UART,
+        .transportCfg = {
+            .cfgUart = {
+                .uart = NINA_UART,
+                .baudRate = NINA_UART_BAUDRATE,
+                .pinTxd = -1,
+                .pinRxd = -1,
+                .pinCts = -1,
+                .pinRts = -1
+            }
+        }
+    };
+
     // needed to avoid thread overflows when using ubxlib functions within a thread
     k_thread_system_pool_assign(k_current_get());
 
@@ -235,11 +301,11 @@ void xWifiNinaInitThread(void){
         //Semaphore given by xWifiNinaInit() function
         k_sem_take( &xWifiNinaInit_semaphore, K_FOREVER );
 
-        LOG_DBG("NINAW156 config request \r\n");
+        LOG_DBG("NINAW156 device init request \r\n");
 
-        // The initialization thread ends up in a uNetAdded status
+        // The initialization thread ends up in a uDeviceOpened status
         // if the module status is already there, no need to init again
-        if( gNinaStatus.uStatus == uNetAdded ){
+        if( gNinaStatus.uStatus == uDeviceOpened ){
             LOG_INF("Already Initialized\r\n");
             gLastOperationResult = X_ERR_SUCCESS;
             continue;
@@ -257,77 +323,22 @@ void xWifiNinaInitThread(void){
             }
         }
 
+        // at initialization reset any previous Scan WiFi results.
+        memset( (void *)&gScannedNetworks, 0 , sizeof(gScannedNetworks) );
+
         // indication that configuration starts
         xLedFade(WIFI_ACTIVATING_LEDCOL, WIFI_ACTIVATING_LED_DELAY_ON, WIFI_ACTIVATING_LED_DELAY_OFF, 0);
 
-        // invalid credentials - see if there is a valid configuration saved
-        if( ! NinaIsCredentialsValid( gWiFiCredentialsPending ) ){
-
-            // clear previous data
-            NinaResetCredentials( gWiFiCredentialsPending );
-
-            int ret_code = xStorageReadWifiCred( gWiFiCredentialsPending.SSIDstr,
-                WIFI_MAX_SSID_LEN,
-                gWiFiCredentialsPending.PSWstr,
-                WIFI_MAX_SSID_LEN,
-                &gWiFiCredentialsPending.sec_type );
-
-            if( ret_code < 0 ){
-                if( ret_code == ERR_STORAGE_FILE_NOT_FOUND ){
-                    LOG_ERR( "Cannot Find WiFI config files, please provide WiFi credentials with provision command \r\n" );    
-                }
-                else{
-                    LOG_ERR( "Error opening WiFI config files, please provide WiFi credentials with provision command \r\n" );
-                }
-
-                NinaErrorHandle( ret_code ); //todo provide proper error code (invalid state?missing config)
-                continue; 
-            }
-        }
-
-        // check the configuration just read from file
-        if( ! NinaIsCredentialsValid( gWiFiCredentialsPending ) ){
-            NinaErrorHandle( X_ERR_INVALID_PARAMETER ); //todo: error code - invalid config
-            continue;
-        }
-
         //power on module if necessary
-        if( !gNinaStatus.isPowered )
+        if( !gNinaStatus.isPowered ){
             xWifiNinaPowerOn();
+        }
 
         //enable/assert Nina-Nora uart comm
         xWifiNinaEnableNoraCom();
 
         //configure Nina-Nora uart comm
         xCommonUartCfg(COMMON_UART_NINA);
-
-        // Connection to Wifi network - if open Network
-        static const uNetworkConfigurationWifi_t wifiConfigOpen = {
-            .type = U_NETWORK_TYPE_WIFI,
-            .module = U_SHORT_RANGE_MODULE_TYPE_NINA_W15,
-            .uart = 2,
-            .pinTxd = -1,
-            .pinRxd = -1,
-            .pinCts = -1,
-            .pinRts = -1,
-            .pSsid = gWiFiCredentialsPending.SSIDstr,
-            .authentication = 1, //2 /* WPA/WPA2/WPA3 - see wifi/api/u_wifi_net.h */,
-            .pPassPhrase = NULL
-        };
-
-        // Connection to Wifi network - if Network requires password
-        static const uNetworkConfigurationWifi_t wifiConfig = {
-            .type = U_NETWORK_TYPE_WIFI,
-            .module = U_SHORT_RANGE_MODULE_TYPE_NINA_W15,
-            .uart = 2,
-            .pinTxd = -1,
-            .pinRxd = -1,
-            .pinCts = -1,
-            .pinRts = -1,
-            .pSsid = gWiFiCredentialsPending.SSIDstr,
-            .authentication = 2, //2 /* WPA/WPA2/WPA3 - see wifi/api/u_wifi_net.h */,
-            .pPassPhrase = gWiFiCredentialsPending.PSWstr
-        };
 
         // Initialize ubxlib Port for Zephyr
         if( !xCommonUPortIsInit() ){
@@ -340,43 +351,30 @@ void xWifiNinaInitThread(void){
 
         gNinaStatus.uStatus = uPortInitialized;
 
-        if( ( err = uNetworkInit() ) != X_ERR_SUCCESS ){ 
-            LOG_ERR("ninaW156 uNetworkInit failed\n");
+        if( ( err = uDeviceInit() ) != X_ERR_SUCCESS ){ 
+            LOG_ERR("ninaW156 uDeviceInit failed\n");
             NinaErrorHandle( err ); 
             continue;
         }
 
-        gNinaStatus.uStatus = uNetInitialized;
+        gNinaStatus.uStatus = uDeviceApiInitialized;
 
-        // Add netowork and keep a copy of the credentials used
-        if(gWiFiCredentialsPending.sec_type == 1){
-            gNetHandle = uNetworkAdd(U_NETWORK_TYPE_WIFI, &wifiConfigOpen);
-            // keep a copy
-            strcpy( gWiFiCredentialsAdded.SSIDstr, wifiConfigOpen.pSsid );
-            gWiFiCredentialsAdded.sec_type = 1;
-        }
-        else{
-            gNetHandle = uNetworkAdd(U_NETWORK_TYPE_WIFI, &wifiConfig);
-            // keep a copy
-            strcpy( gWiFiCredentialsAdded.SSIDstr, wifiConfig.pSsid );
-            strcpy( gWiFiCredentialsAdded.PSWstr, wifiConfig.pPassPhrase );
-            gWiFiCredentialsAdded.sec_type = 2;
-        }
+        // Open Device and keep a copy of the credentials used
+        err = uDeviceOpen( &deviceCfg, &gDevHandle);
 
-
-        // If network could not be added
-        if( gNetHandle < 0){
-            LOG_ERR("Could not add network\r\n");
-            // delete the copy since the network has not been added/initialized
-            NinaResetCredentials( gWiFiCredentialsAdded );
-            //gLastOperationResult = gNetHandle;
-            NinaErrorHandle(gNetHandle);
+        // If device could not be opened
+        if( err < 0){
+            LOG_ERR("Could not Open WiFi Device\r\n");
+            // Invalidate any credentials copies that might exist
+            NinaResetCredentials( &gWiFiCredentialsAdded );
+            gDevHandle = NULL;
+            NinaErrorHandle( err );
             continue;
         }
 
-        // network succesfully added
-        gNinaStatus.uStatus = uNetAdded;
-        LOG_INF("Configured. Network Added\r\n");
+        // Device succesfully opened
+        gNinaStatus.uStatus = uDeviceOpened;
+        LOG_INF("WiFi device configured and opened\r\n");
         gLastOperationResult = X_ERR_SUCCESS;
 
         //stop configuration Led indication
@@ -401,7 +399,7 @@ void xWifiNinaDeinitThread(void){
         }
 
         // Invalidate credentials used
-        NinaResetCredentials( gWiFiCredentialsAdded );
+        NinaResetCredentials( &gWiFiCredentialsAdded );
 
         LOG_INF("Module Deinitialized\r\n");
         gNinaStatus.uStatus = uPortNotInitialized;
@@ -434,15 +432,15 @@ void xWifiNinaConnectThread(void){
             continue;
         }
 
-        // if xWifiNinaInit() has not been called prior this thread is called.
-        if( gNinaStatus.uStatus < uNetAdded ){
+        // if xWifiNinaInit() has not been called before, it is called now.
+        if( gNinaStatus.uStatus < uDeviceOpened ){
             
-            LOG_WRN("No valid network added. Configuring and adding Network now\r\n");
+            LOG_WRN("No valid WiFi device opened. Configuring and opening device now\r\n");
      
-            // Configure and add a network
+            // Configure and add a WiFi device
             xWifiNinaInit();
             
-            while( ( gNinaStatus.uStatus < uNetAdded ) && ( gLastOperationResult == X_ERR_SUCCESS ) ){
+            while( ( gNinaStatus.uStatus < uDeviceOpened ) && ( gLastOperationResult == X_ERR_SUCCESS ) ){
                 k_sleep(K_MSEC(1000));
                 //ubxlib contains timeouts by itself
             }
@@ -457,16 +455,82 @@ void xWifiNinaConnectThread(void){
         // set up led indication
         xLedFade(WIFI_ACTIVATING_LEDCOL, WIFI_ACTIVATING_LED_DELAY_ON, WIFI_ACTIVATING_LED_DELAY_OFF, 0);
 
-        // Connnect to network
+        // Has the user provided valid credentials by using the "provision" command?
+        // If not, check if there is a valid configuration saved in the memory
+        if( ! NinaIsCredentialsValid( gWiFiCredentialsPending ) ){
+
+            // clear previous data
+            NinaResetCredentials( &gWiFiCredentialsPending );
+
+            int ret_code = xStorageReadWifiCred( gWiFiCredentialsPending.SSIDstr,
+                WIFI_MAX_SSID_LEN,
+                gWiFiCredentialsPending.PSWstr,
+                WIFI_MAX_SSID_LEN,
+                &gWiFiCredentialsPending.sec_type );
+
+            if( ret_code < 0 ){
+                if( ret_code == ERR_STORAGE_FILE_NOT_FOUND ){
+                    LOG_ERR( "Cannot Find WiFI config files, please provide WiFi credentials with provision command or mobile app \r\n" );    
+                }
+                else{
+                    LOG_ERR( "Error opening WiFI config files, please provide WiFi credentials with provision command or mobile app \r\n" );
+                }
+
+                NinaErrorHandle( ret_code );
+                continue; 
+            }
+        }
+
+        // check the configuration just read from file
+        if( ! NinaIsCredentialsValid( gWiFiCredentialsPending ) ){
+            NinaErrorHandle( X_ERR_INVALID_PARAMETER ); 
+            continue;
+        }
+
+        // Connection to Wifi network configuration- if open Network
+        static const uNetworkCfgWifi_t  wifiConfigOpen = {
+            .type = U_NETWORK_TYPE_WIFI,
+            .pSsid = gWiFiCredentialsPending.SSIDstr,
+            .authentication = 1, //2 /* WPA/WPA2/WPA3 - see wifi/api/u_wifi_net.h */,
+            .pPassPhrase = NULL
+        };
+
+        // Connection to Wifi network configuration- if Network requires password
+        static const uNetworkCfgWifi_t  wifiConfig = {
+            .type = U_NETWORK_TYPE_WIFI,
+            .pSsid = gWiFiCredentialsPending.SSIDstr,
+            .authentication = 2, //2 /* WPA/WPA2/WPA3 - see wifi/api/u_wifi_net.h */,
+            .pPassPhrase = gWiFiCredentialsPending.PSWstr
+        };
+
+        // Connnect to network (open or protected with password)
         LOG_INF("Bring-up WiFi\r\n");
-        ret = uNetworkUp(gNetHandle);
+
+        // open
+        if(gWiFiCredentialsPending.sec_type == 1){
+            if( ( ret = uNetworkInterfaceUp( gDevHandle, U_NETWORK_TYPE_WIFI, &wifiConfigOpen ) ) == X_ERR_SUCCESS ){
+                // If connected to network succesfully, keep a copy of the network used
+                strcpy( gWiFiCredentialsAdded.SSIDstr, wifiConfigOpen.pSsid );
+                gWiFiCredentialsAdded.sec_type = 1;    
+            }
+        }
+        // password protected
+        else{
+            if( ( ret = uNetworkInterfaceUp( gDevHandle, U_NETWORK_TYPE_WIFI, &wifiConfig ) ) == X_ERR_SUCCESS ){
+                // If connected to network succesfully, keep a copy of the network used
+                strcpy( gWiFiCredentialsAdded.SSIDstr, wifiConfig.pSsid );
+                strcpy( gWiFiCredentialsAdded.PSWstr, wifiConfig.pPassPhrase );
+                gWiFiCredentialsAdded.sec_type = 2;
+            }
+        }
+
+        // If could not connect to network
         if( ret != X_ERR_SUCCESS ){
-            LOG_ERR("uNetworkUp failed \r\n");
+            LOG_ERR("uNetworkInterfaceUp failed \r\n");
             gNinaStatus.isConnected = false;    
             NinaErrorHandle( ret );
             continue;
         }
-
 
         gNinaStatus.isConnected = true;
         LOG_INF("WiFi Connected\r\n");
@@ -495,7 +559,8 @@ void xWifiNinaPowerOffThread(void){
                 k_sleep(K_MSEC(1000));
             }
         }
-
+        
+        // power down module
         xWifiNinaEnablePinDeassert();
 
         gNinaStatus.isPowered = false;
@@ -634,18 +699,19 @@ void xWifiNinaPowerOn(void)
 
 
 
-void xWifiNinaNetworkDeinit(void){
+void xWifiNinaDeviceClose(void){
 
-    LOG_INF("WiFi network Deinitialize request\r\n");
+    LOG_INF("WiFi Device Close request\r\n");
 
     if(gNinaStatus.isConnected){
         LOG_WRN("WiFi connected. Disconnecting now\r\n");
         xWifiNinaDisconnect();
     }
 
-    uNetworkDeinit();
+    uDeviceClose( gDevHandle, false );
+    uDeviceDeinit();
     gNinaStatus.uStatus = uPortInitialized;
-    LOG_INF("Net Deinitialized \r\n");
+    LOG_INF("WiFi Device Closed \r\n");
 
 }
 
@@ -677,10 +743,12 @@ void xWifiNinaDisconnect(void){
     
     xLedFade(WIFI_DEACTIVATING_LEDCOL, WIFI_ACTIVATING_LED_DELAY_ON, WIFI_ACTIVATING_LED_DELAY_OFF, 0);
 
-    gLastOperationResult = uNetworkDown(gNetHandle);
+    gLastOperationResult = uNetworkInterfaceDown( gDevHandle, U_NETWORK_TYPE_WIFI );
     if(gLastOperationResult != U_ERROR_COMMON_SUCCESS){
-        LOG_ERR("uNetworkDown error: %d \r\n", gLastOperationResult);
+        LOG_ERR("uNetworkInterfaceDown error: %d \r\n", gLastOperationResult);
     }
+
+    NinaResetCredentials( &gWiFiCredentialsAdded );
     
     xLedOff(); //stop indication
     gNinaStatus.isConnected = false;
@@ -689,9 +757,209 @@ void xWifiNinaDisconnect(void){
 }
 
 
+err_code xWifiNinaDeleteNetworkConfig( void ){
 
-int32_t xWifiNinaGetHandle(void){
-    return gNetHandle;
+    int rc;
+    err_code ret = 0;
+
+    NinaResetCredentials( &gWiFiCredentialsPending );
+
+    rc = xStorageDeleteFile( wifi_cred_psw_fname ); 		
+    if(rc != 0 ){
+        if( rc == ERR_STORAGE_FILE_NOT_FOUND ){
+            /* password file may exist, or not. So, if the
+            *  not found file error is returned, it is not
+            *  taken into account */
+            
+            //do nothing
+        }
+        else{
+            // all other errors may be returned
+            ret = (err_code) rc;
+        }
+    }
+    
+    rc = xStorageDeleteFile( wifi_cred_sec_type_fname );
+    if(rc != 0 ){
+        ret = (err_code) rc;
+    }
+
+    /* Delete the ssid file last, to return its error code
+    *  in case of failure (we are mostly interested in file
+    *  not found error mostly in this case and the ssid is
+    *  the most important thing. Since the last error is certain
+    *  to be returned, we delete this file last) */
+    rc = xStorageDeleteFile( wifi_cred_ssid_fname );  	
+    if(rc != 0 ){
+        ret = (err_code) rc;
+    }
+
+    /* even if one of the delete actions returns error
+    *  return this error code. If more than one fails, 
+    *  return last error code */
+    return ret; 
+}
+
+
+
+err_code xWifiNinaSaveSSID( char *ssidStr ){
+    
+    uint32_t strLen = strlen(ssidStr);
+    err_code ret;
+
+    if( strLen > WIFI_MAX_SSID_LEN ){
+        
+        LOG_WRN("SSID provided too long. Max accepted is %d chars \r\n",
+                 WIFI_MAX_SSID_LEN);
+        return X_ERR_INVALID_PARAMETER;
+    }
+
+    if( strLen < WIFI_MIN_SSID_LEN ){
+ 
+        LOG_WRN("SSID provided too short. Min accepted is %d chars \r\n",
+                 WIFI_MIN_SSID_LEN);
+        return X_ERR_INVALID_PARAMETER;
+    }
+
+    if( ( ret = xStorageSaveFile( ssidStr, wifi_cred_ssid_fname, strLen +1 ) ) < 0 ){
+		return ret;
+	}
+
+    // if save was successfull, delete any temp pending configuration 
+    // (because this setup is incomplete, only ssid is given)
+    NinaResetCredentials( &gWiFiCredentialsPending );
+
+    return X_ERR_SUCCESS;
+}
+
+
+err_code xWifiNinaSaveSecType( int32_t secType ){
+
+    err_code ret;
+
+    if( ( secType != 1 ) && ( secType != 2 )  ){
+         LOG_WRN("Security Type Parameter Provided wrong. Should be 1 or 2 (unsigned integer type) \r\n");
+         return X_ERR_INVALID_PARAMETER;
+    }
+
+    if( ( ret = xStorageSaveFile( (void*)&secType, wifi_cred_sec_type_fname, sizeof(secType) ) ) < 0 ){
+		return ret;
+    }
+
+    // if save was successfull, delete any temp pending configuration 
+    // (because this setup is incomplete, only sec type is given)
+    NinaResetCredentials( &gWiFiCredentialsPending );
+
+    return X_ERR_SUCCESS;	
+}
+
+
+err_code xWifiNinaSavePassword( char *passwordStr ){
+    
+    uint32_t strLen = strlen(passwordStr);
+    err_code ret;
+
+    if( strLen > WIFI_MAX_PSW_LEN ){
+        
+        LOG_WRN("Password provided too long. Max accepted is %d chars \r\n",
+                 WIFI_MAX_PSW_LEN);
+        return X_ERR_INVALID_PARAMETER;
+    }
+
+    if( strLen < WIFI_MIN_PSW_LEN ){
+ 
+        LOG_WRN("Password provided too short. Min accepted is %d chars \r\n",
+                 WIFI_MIN_PSW_LEN);
+        return X_ERR_INVALID_PARAMETER;
+    }
+
+    if( ( ret = xStorageSaveFile( passwordStr, wifi_cred_psw_fname, strLen +1 ) ) < 0 ){
+		return ret;
+	}
+
+    // if save was successfull, delete any temp pending configuration 
+    // (because this setup is incomplete, only password is given)
+    NinaResetCredentials( &gWiFiCredentialsPending );
+
+    return X_ERR_SUCCESS;
+}
+
+
+err_code xWifiNinaScan( uint16_t *foundNetsNum ){
+
+    err_code ret;
+
+    // Is device open?
+    if( gNinaStatus.uStatus < uDeviceOpened ){
+        return X_ERR_INVALID_STATE;
+    }
+
+    // with every new scan command, reset the results from previous scan commands
+    memset( (void *)&gScannedNetworks, 0 , sizeof(gScannedNetworks) );
+
+    ret = uWifiStationScan( gDevHandle, NULL, uWifiScanResultCallback);
+    if( ret == U_ERROR_COMMON_SUCCESS ){
+        *foundNetsNum = gScannedNetworks.networksNum;
+    }
+    
+    
+    return ret;
+}
+
+
+
+err_code xWifiNinaGetScanResult( uint16_t reqResultNum, uWifiScanResult_t *result ){
+
+    // check parameters
+    if( reqResultNum == 0 ){
+        return X_ERR_INVALID_PARAMETER;
+    }
+
+    if( (reqResultNum-1) >= gScannedNetworks.networksNum ){
+        return X_ERR_INVALID_PARAMETER;
+    }
+
+    *result = gScannedNetworks.networks[ reqResultNum-1 ];
+
+    return X_ERR_SUCCESS;
+
+}
+
+
+void xWifiNinaTypeLastScanResults( void ){
+
+     // If no networks were found, during the scan process
+    if( gScannedNetworks.networksNum == 0 ){
+        LOG_WRN( "No networks found or Scan command has not been used\r\n" );
+        return;
+    }
+
+    // if maximum number of results has been reached
+    if( gScannedNetworks.maxResultsExceeded ){
+        LOG_WRN( "Maximum numbers of results (%d) reached, some results may not appear\r\n",
+                WIFI_SCAN_RESULTS_BUF_SIZE );
+    }
+
+    // type the results
+    // %*s in shell print is like %20s, but instead of 20 the * points to
+    // U_WIFI_SSID_SIZE. It is used for alligned printing
+    for( uint8_t x = 0; x < gScannedNetworks.networksNum; x++ ){
+        LOG_INF( "%3d: SSID: %*s  Rssi: %d", x+1,
+                  U_WIFI_SSID_SIZE,
+                  gScannedNetworks.networks[x].ssid,
+                  gScannedNetworks.networks[x].rssi );
+    }
+}
+
+
+bool xWifiNinaIsScanMaxReached(void){
+    return gScannedNetworks.maxResultsExceeded;
+}
+
+
+
+uDeviceHandle_t xWifiNinaGetHandle(void){
+    return gDevHandle;
 }
 
 
@@ -767,14 +1035,14 @@ void xWifiNinaTypeNetworkParamsCmd(const struct shell *shell, size_t argc, char 
 
     //  ----------- Type Active Config ----
     if( ! NinaIsCredentialsValid( gWiFiCredentialsAdded ) ){
-        shell_print(shell, "------ No valid Network Added/Active --------\r\n");      
+        shell_print(shell, "------ No valid Active Network  --------\r\n");      
     }
     else if( gWiFiCredentialsAdded.sec_type==1 ){
-        shell_print(shell, "------ Currently Added/Active Network --------\r\n");
+        shell_print(shell, "------ Currently Active Network --------\r\n");
         shell_print(shell, "SSID: ""%s"",  Open network \r\n", gWiFiCredentialsAdded.SSIDstr);
     }
     else if( gWiFiCredentialsAdded.sec_type==2 ){
-        shell_print(shell, "------ Currently Added/Active Network --------\r\n");
+        shell_print(shell, "------ Currently Active Network --------\r\n");
         shell_print(shell, "SSID: ""%s"",  Passphrase: ""%s"" \r\n", gWiFiCredentialsAdded.SSIDstr, gWiFiCredentialsAdded.PSWstr );
     }
 
@@ -797,14 +1065,14 @@ void xWifiNinaTypeNetworkParamsCmd(const struct shell *shell, size_t argc, char 
             }
 
              // reset invalid config to a known state
-             NinaResetCredentials( gWiFiCredentialsPending );
+             NinaResetCredentials( &gWiFiCredentialsPending );
              return;
         }
 
         // check if read config is valid
         if( ! NinaIsCredentialsValid( gWiFiCredentialsPending ) ){
             shell_print(shell,"Read config is not valid\r\n");
-            NinaResetCredentials( gWiFiCredentialsPending );
+            NinaResetCredentials( &gWiFiCredentialsPending );
             return;
         }
     }
@@ -840,6 +1108,53 @@ void xWifiNinaTypeNetworkParamsCmd(const struct shell *shell, size_t argc, char 
     }
     
     shell_print(shell, "SSID: ""%s"",  Passphrase: ""%s"", Sec Type: %d \r\n\r\n", read_cred.SSIDstr, read_cred.PSWstr, read_cred.sec_type );
+
+    return;
+}
+
+
+
+void xWifiNinaScanCmd(const struct shell *shell, size_t argc, char **argv){
+
+    err_code ret;
+    uint16_t resultsNum;
+
+    ret = xWifiNinaScan( &resultsNum );
+    
+    if( ret == X_ERR_INVALID_STATE ){
+        shell_error( shell, "WiFi Device should be initialized first with the \"init\" command" );
+        return;
+    }
+    else if( ret != X_ERR_SUCCESS ){
+        shell_error( shell, "Error while scanning\r\n" );
+        return;
+    }
+
+    shell_print( shell, "\r\n\r\n .....Scan complete..... \r\n" );
+
+    // If no networks were found, during the scan process
+    if( gScannedNetworks.networksNum == 0 ){
+        shell_warn( shell, "No networks found\r\n" );
+        return;
+    }
+
+    // if maximum number of results has been reached
+    if( gScannedNetworks.maxResultsExceeded ){
+        shell_warn( shell,"Maximum numbers of results (%d) reached, some results may not appear\r\n",
+                    WIFI_SCAN_RESULTS_BUF_SIZE );
+    }
+
+    // type the results
+    // %*s in shell print is like %20s, but instead of 20 the * points to
+    // U_WIFI_SSID_SIZE. It is used for alligned printing
+    for( uint8_t x = 0; x < gScannedNetworks.networksNum; x++ ){
+        shell_print( shell,"%3d: SSID: %*s  Rssi: %d", x+1,
+                     U_WIFI_SSID_SIZE,
+                     gScannedNetworks.networks[x].ssid,
+                     gScannedNetworks.networks[x].rssi );
+    }
+
+    shell_print( shell, "\r\n.....End of results.....\r\n" );
 
     return;
 }

@@ -1,0 +1,44 @@
+# ICG-20330 3-axis gyroscope
+
+# Copyright (c) 2022, u-blox
+# SPDX-License-Identifier: Apache-2.0
+
+config ICG20330
+	bool "ICG20330 gyroscope driver"
+	depends on I2C && HAS_DTS_GPIO
+	help
+	  Enable driver for the ICG20330 gyroscope
+
+if ICG20330
+
+config ICG20330_WHOAMI
+	hex "WHOAMI value"
+	range 0x00 0xff
+	default 0x92
+	help
+	  The datasheet defines the value of the WHOAMI register, but some
+	  pre-production devices can have a different value. It is unlikely you
+	  should need to change this configuration option from the default.
+
+config ICG20330_RANGE
+	int "Full scale range"
+	range 0 3
+	default 0
+	help
+	  Selects the full scale range
+	  0: +/-31.25 dps
+	  1: +/-62.5 dps 
+	  2: +/-124 dps 
+	  3: +/-250 dps
+
+choice
+	prompt "Trigger mode"
+	default ICG20330_TRIGGER_NONE
+
+config ICG20330_TRIGGER_NONE
+	bool "No trigger"
+
+
+endchoice
+
+endif # ICG20330

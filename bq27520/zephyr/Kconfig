@@ -1,0 +1,34 @@
+# Copyright (c) 2020 Linumiz
+#
+# SPDX-License-Identifier: Apache-2.0
+
+config BQ27520
+	bool "BQ27520 Fuel Gauge"
+	depends on I2C
+	help
+	  Enable I2C-based driver for BQ27520 Fuel Gauge.
+
+if BQ27520
+
+config BQ27520_LAZY_CONFIGURE
+	bool "Configure on first usage instead of init"
+	default false
+	help
+	  Configuring the sensor can take a long time, which
+	  we can delay till the first sample request and keep
+	  the boot time as short as possible.
+
+config BQ27520_DESIGN_CAPACITY
+	int "Battery Design Capacity"
+	default 1000
+	help
+	  Battery Design Capacity
+
+config BQ27520_TERMINATE_VOLTAGE
+	int "Battery Terminate Voltage (V)"
+	default 3000
+	help
+	  Battery Terminate Voltage (V)
+
+
+endif # BQ27520

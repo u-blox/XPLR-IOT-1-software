@@ -27,12 +27,11 @@
 #include <logging/log_ctrl.h>
 
 #include "x_sens_bme280.h"
-#include "x_sens_adxl345.h"
 #include "x_sens_lis3mdl.h"
-#include "x_sens_fxas21002.h"
+#include "x_sens_icg20330.h"
 #include "x_sens_lis2dh12.h"
 #include "x_sens_ltr303.h"
-#include "x_sens_bq27421.h"
+#include "x_sens_battery_gauge.h"
 #include "x_sens_common.h"
 
 #include "x_pos_maxm10s.h"
@@ -58,12 +57,11 @@ void main(void)
 
 	//Initialize sensors
 	xSensBme280Init();
-	xSensAdxl345Init();
 	xSensLis3mdlInit();
-	xSensFxas21002Init();
+	xSensIcg20330Init();
 	xSensLis2dh12Init();
 	xSensLtr303Init();
-	xSensBq27421Init();
+	xSensBatGaugeInit();
 
 	// Set sensors to not sample until command given
 	xSensDisableAll();
@@ -74,13 +72,12 @@ void main(void)
 	xCellSaraConfigPins();
 	xWifiNinaConfigPins();
 	xPosMaxM10ConfigPins();
-	xPosMaxM10PowerOn();
 
     // Set GNSS position not to be sampled until command given
-	// The MAX module is powered on though
 	xPosMaxM10Disable();
 
-	xStorageInit();
+    // Initializes non-Volatile memory of NORA-B1 for use with littlefs
+	//xStorageInit();
 	xButtonsConfig();
 
 	// Set the Logger module status to a desired startup config
@@ -91,11 +88,19 @@ void main(void)
 	}
 	xLogStartupConfig();
 
-	// BLE Functionality
+	// Bluetooth LE (BLE) Functionality
 	xBleInit();
+	xBleStartAdvertising();
 
 	// MFC Functionality
 	xNfcConfig();
 	xNfcInit();
+
+	/* From now on the application waits for commands from the user
+	 * (either via shell UART terminal or via button presses or BLE commands)
+	 * and enables the appropriate threads (or functions) to execute those
+	 * commands. You can access shell commands in source code from shell_cmd 
+	 * directory.
+	*/
 }
 

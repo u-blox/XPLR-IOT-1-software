@@ -32,6 +32,7 @@
 #include "x_cell_saraR5.h"
 #include "x_wifi_mqtt.h"
 #include "x_cell_mqttsn.h"
+#include "x_pos_maxm10s.h"
 #include "x_logging.h"
 #include "x_sens_common.h"
 #include "x_data_handle.h" // reset sensor aggregation message
@@ -228,8 +229,14 @@ void xSensorAggregationStopWifiThread(void){
             nina_stat = xWifiNinaGetModuleStatus();
         }
 
+        xWifiNinaPowerOff();
+
         xSensDisableAll();
         xSensPublishNone();
+
+        // also power off MaxM10 module since it is not used
+        xPosMaxM10PowerOff();
+
         LOG_INF("WiFi Sensor Aggregation stopped \r\n");
         gCurrentMode = xSensAggModeDisabled;
     }
@@ -340,6 +347,10 @@ void xSensorAggregationStopCellThread(void){
 
         xSensDisableAll();
         xSensPublishNone();
+
+        // also power off MaxM10 module since it is not used
+        xPosMaxM10PowerOff();
+        
         LOG_INF("Cell Sensor Aggregation stopped \r\n");
         gCurrentMode = xSensAggModeDisabled;
     }

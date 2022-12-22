@@ -37,16 +37,28 @@
  * MAXM10S
  * -------------------------------------------------------------- */
 
+// NORA Uart peripheral instance to which MAX is connected
+#define MAX_UART                3
+#define MAX_UART_BAUDRATE       9600
+
 #define NORA_EN_MAX_PIN         4    /** Enables MAX voltage rail */
 #define MAX_BACKUP_EN_PIN       37   /** MaxM10S Enable backup pin */
 #define MAX_SAFEBOOT_PIN        7    /** MAX_SAFEBOOT/NINA_SW2 pin. (implements NOT logic)! 
                                          during reset puts device in safeboot mode */
 #define NORA_MAX_COM_EN_PIN     47   /** Controls whether Uart Routes to NORA or USB 2 UART bridge */
 
+#define MAX_ENABLE_POWER        (-1) // Temporary....
+
+
+
 
 /* ----------------------------------------------------------------
  * SARA-R5
  * -------------------------------------------------------------- */
+
+// NORA Uart peripheral instance to which SARA is connected
+#define SARA_UART           2
+#define SARA_UART_BAUDRATE  115200
 
 // SARA-R5 uart pins (secondary uart - primary is routed to UART 2 USB bridge)
 #define SARA_SEC_UART_RX    40
@@ -59,23 +71,32 @@
 #define NORA_EN_SARA_PIN    10         /* Applies voltage rail to  module */
 #define SARA_INT_PIN        33         /* SARA_INT/NINA_SW1 pin */
 
+#define SARA_V_INT_PIN      (-1)         // Not connected
 
 /* ----------------------------------------------------------------
  * NINA-W156
  * -------------------------------------------------------------- */
 
+// NORA Uart peripheral instance to which NINA is connected
+#define NINA_UART             SARA_UART  // NINA and SARA in this implementation
+                                         // share the same UART peripheral, so 
+                                         // either one or the other can occupy this uart 
+                                         // at a time. 
+
+#define NINA_UART_BAUDRATE    115200
+
 // NINA-W156 uart pins
-#define NINA_UART_RX    43
-#define NINA_UART_TX    31
-#define NINA_UART_CTS   30
-#define NINA_UART_RTS   20
+#define NINA_UART_RX          43
+#define NINA_UART_TX          31
+#define NINA_UART_CTS         30
+#define NINA_UART_RTS         20
 
-#define NINA_RST_PIN           41    /* Reset pin. Active low */
-#define NINA_EN_PIN            8     /* Applies voltage rail to NINA module */
-#define NORA_NINA_COM_EN_PIN   42    /** Controls whether Uart Routes to NORA or USB 2 UART bridge */
+#define NINA_RST_PIN          41    /* Reset pin. Active low */
+#define NINA_EN_PIN           8     /* Applies voltage rail to NINA module */
+#define NORA_NINA_COM_EN_PIN  42    /** Controls whether Uart Routes to NORA or USB 2 UART bridge */
 
-#define NINA_SW1_PIN           SARA_INT_PIN       /* Careful when using this pin: it serves a double purpose */
-#define NINA_SW2_PIN           MAX_SAFEBOOT_PIN   /* Careful when using this pin: it serves a double purpose */
+#define NINA_SW1_PIN          SARA_INT_PIN       /* Careful when using this pin: it serves a double purpose */
+#define NINA_SW2_PIN          MAX_SAFEBOOT_PIN   /* Careful when using this pin: it serves a double purpose */
 
 
 /* ----------------------------------------------------------------

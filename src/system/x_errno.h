@@ -30,7 +30,9 @@
 #include "u_error_common.h"     //ubxlib common error codes
 #include <stdint.h>
 
-/**Error Code Type definition*/
+/** Error Code Type definition -- best to keep it at the same type as returned errors
+ *  from ubxlib
+*/
 typedef int32_t err_code;  
 
 
@@ -59,6 +61,7 @@ typedef int32_t err_code;
 #define X_ERR_INVALID_STATE        ( X_ERR_BASE -7 )
 #define X_ERR_AT_CMD               ( X_ERR_BASE -8 )
 #define X_ERR_MQTTSN_CON           ( X_ERR_BASE -9 )
+#define X_ERR_NOT_FOUND            ( X_ERR_BASE -10 )
 
 
 // Special error code definitions -- these are error codes

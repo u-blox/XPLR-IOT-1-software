@@ -1,5 +1,22 @@
+v1.0 -- 22/12/2022
+- Ubxlib v1.0.0 supported (ubxlib as submodule)
+- Mobile application support (mobile com protocol v1.0)
+- Connectionless MQTTSN QOS=3 is not supported (temporarily - need to update to ubxlib v1.1.0 for this)
+- Both BQ27421 and BQ27520 Fuel Gauges are supported
+- Replaced FXAS21002 sensor with ICG20330
+- MaxM10 is not powered on, at startup
+- Bluetooth LE Uses u-blox public device address, if this is saved in NORA-B1 OTP registers. Otherwise random device address is used.
+- Added commands to enable/disable, disconnect Bluetooth LE. Status of Bluetooth LE is also typed with the "modules status" command
+- Added commands to enable/disable NFC. Status of NFC is also typed with the "modules status" command
+- ADXL345 sensor has been removed
+- Affects dashboard: The JSON message key for battery measurement has been changed from "BQ27421" to "BATTERY" 
+- fixed a bug in reset nina wifi credentials
+- fixed a bug in wifi nina network validity for open networks
+- minor changes (mostly debug messages)
+
+
 v0.3 -- 20/07/2022
-- Added BLE basic functionality for Testing with NUS service.
+- Added Bluetooth LE basic functionality for Testing with NUS service.
 - Added NFC basic functionality for testing.
 - Added Serial Com Selection command for NINA-W156 module
 - Bug Fix: SARA-R5 remains always on. Proper Handling of SARA pins

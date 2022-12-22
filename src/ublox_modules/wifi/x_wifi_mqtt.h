@@ -175,6 +175,13 @@ err_code xWifiMqttClientPublish(const char *pTopicNameStr, const char *pMessage,
 err_code xWifiMqttGetLastOperationResult(void);
 
 
+/** Delete any saved Mqtt configuration
+ * 
+ * @return        zero on success else negative error code.
+ */
+err_code xWifiMqttDeleteConfig( void );
+
+
 /* ----------------------------------------------------------------
  * FUNCTIONS IMPLEMENTING SHELL-COMMANDS
  * -------------------------------------------------------------- */
@@ -220,6 +227,10 @@ void xWifiMqttClientStatusCmd(const struct shell *shell, size_t argc, char **arg
  * @param argv   the array including the parameters themselves (Topic Name, Message, QOS).
  */
 void xWifiMqttSendCmd(const struct shell *shell, size_t argc, char **argv);
+
+
+
+
 
 
 #endif   //X_WIFI_MQTT_H__

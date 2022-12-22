@@ -42,17 +42,16 @@
 
 /** maximum number of log modules for which the "xLogSaveState" function can hold
  *  their current status */
-#define LOG_STATUS_BUF_MAXLEN       50
+#define LOG_STATUS_BUF_MAXLEN       80
 
 
 // Logging module names for the sensor apps
 #define LOGMOD_NAME_BME280      bme280_app  
-#define LOGMOD_NAME_ADXL345     adxl345_app  
-#define LOGMOD_NAME_FXAS21002   fxas21002_app  
+#define LOGMOD_NAME_ICG20330    icg20330_app  
 #define LOGMOD_NAME_LIS2DH12    lis2dh12_app  
 #define LOGMOD_NAME_LIS3MDL     lis3mdl_app
 #define LOGMOD_NAME_LTR303      ltr303_app
-#define LOGMOD_NAME_BQ27421     bq27421_app
+#define LOGMOD_NAME_BQ27520     battery_gauge_app
 
 // Logging module names for the ublox module apps
 #define LOGMOD_NAME_UBLMOD_COMMON   ubloxMod_common
@@ -62,9 +61,9 @@
 #define LOGMOD_NAME_WIFI_MQTT       mqtt_app
 #define LOGMOD_NAME_CELL_MQTTSN     mqttSN_app
 #define LOGMOD_NAME_BLE             ble_app
-
-
 #define LOGMOD_NAME_NFC             nfc_app
+
+#define LOGMOD_NAME_BLE_CMD         ble_cmd_app
 
 //Logging module names of other modules
 #define LOGMOD_NAME_STORAGE         storage_app

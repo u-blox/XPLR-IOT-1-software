@@ -33,24 +33,7 @@
 #include <logging/log.h>
 
 //ubxlib related
-#include "u_cfg_sw.h"
-#include "u_cfg_app_platform_specific.h"
-
-#include "u_error_common.h"
-
-#include "u_port.h"
-#include "u_port_debug.h"
-#include "u_port_uart.h"
-
-#include "u_at_client.h"
-
-#include "u_cell.h"
-#include "u_cell_net.h"
-#include "u_cell_pwr.h"
-#include "u_cell_cfg.h"
-
-#include "u_network.h"
-#include "u_network_config_cell.h"
+//#include "ubxlib.h" --> included via the header .h file
 
 //Sensor aggregation related
 #include "x_logging.h"
@@ -142,46 +125,21 @@ xCellSaraStatus_t gSaraStatus={
 };
 
 
-/** Holds the result of the last operation performed by this module (refers to operations that need to report their result
- *  to other modules of the application and cannot report their results directly e.g. a thread operation) */
+/** Holds the result of the last operation performed by this module (refers to operations
+ *  that need to report their result to other modules of the application and cannot report
+ *  their results directly e.g. a thread operation) */
 static err_code gLastOperationResult = X_ERR_SUCCESS;
 
-/** Network Handle returned and used by ubxlib functions */
-int32_t gNetHandle;
 
-
+/** This holds which connection plan is active:
+ * - MQTT Anywhere: Connect using a Thingstream SIM card
+ * - MQTT Flex: Connect using a third party SIM card
+ */
 xCellMqttSnPlan_t gMqttSnActivePlan = MQTTSN_DEFAULT_PLAN;
 
-// Configure depending on the SIM card used (MQTT Flex plan in Thingstream portal)
-const uNetworkConfigurationCell_t gCellSaraFlexConfig = {U_NETWORK_TYPE_CELL,
-                                                    U_CELL_MODULE_TYPE_SARA_R5,
-                                                    NULL, /* SIM pin */
-                                                    "iot.1nce.net", /* APN: accept default */
-                                                    300, /* Connection timeout in seconds (240)*/
-                                                    2,
-                                                    -1,
-                                                    -1,
-                                                    -1,
-                                                    -1,
-                                                    -1,
-                                                    -1,
-                                                    -1};
 
-
-// Preconfigured for Thingstream SIM cards (MQTT Anywhere plan in Thingstream portal)
-const uNetworkConfigurationCell_t gCellSaraAnywhereConfig = {U_NETWORK_TYPE_CELL,
-                                                    U_CELL_MODULE_TYPE_SARA_R5,
-                                                    NULL, /* SIM pin */
-                                                    "TSUDP", /* APN: accept default */
-                                                    300, /* Connection timeout in seconds (240)*/
-                                                    2,
-                                                    -1,
-                                                    -1,
-                                                    -1,
-                                                    -1,
-                                                    -1,
-                                                    -1,
-                                                    -1};
+/** Device Handle returned and used by ubxlib functions */
+static uDeviceHandle_t gDevHandle = NULL;
 
 
 /* ----------------------------------------------------------------
@@ -229,25 +187,28 @@ static int32_t xCellSaraRegistrationConfig(void){
 
     int32_t ret;
 
-    // if uNetworkAdd has not been added we cannot use AtClient to send AT commands
-    if(gSaraStatus.uStatus<uNetAdded){
-        LOG_WRN("Config Reg to MNO: Initialize first\r\n");
-        return -1; //err code invalid state
+    // if uDeviceOpen has not been called yet, we cannot use AtClient to send AT commands
+    if( gSaraStatus.uStatus < uDeviceOpened ){
+        LOG_WRN("Configuration prior Connection to MNO: Initialize first (use init command)\r\n");
+        return X_ERR_INVALID_STATE; //err code invalid state
     }
 
+    // The setting in this function, cannot be set when the module is connected/register to MNO
     if( gSaraStatus.isRegistered || gSaraStatus.isConnected ){
-        LOG_WRN("Config Reg to MNO: Disconnect(deinit) and initialize again\r\n");
-        return -1; //err_code invalid state
+        LOG_WRN("Configuration prior Connection to MNO: Disconnect(deinit) and initialize again (init)\r\n");
+        return X_ERR_INVALID_STATE; //err_code invalid state
     }
 
-    // two situations have been programmed one when using a Thingstream card and one for
-    // using a 1nce SIM card over an NB-IoT newtork. 
-    // The user may change this according to needs
+    // two situations have been programmed:
+    // - One when using a Thingstream card
+    // - Another one for using a 1nce SIM card over an NB-IoT newtork. 
+    // The user may change this section according to his needs.
+    // At this point only the URAT configuration is changed, between the two plans
 
     if( gMqttSnActivePlan == FLEX){
         
         // just check the URAT configuration (if its NB-IoT)
-        uCellNetRat_t rat = uCellCfgGetRat(gNetHandle, 0);
+        uCellNetRat_t rat = uCellCfgGetRat(gDevHandle, 0);
         if( rat == U_CELL_NET_RAT_NB1 ){
             LOG_INF("Urat is ok: %d", rat);
         }
@@ -255,11 +216,11 @@ static int32_t xCellSaraRegistrationConfig(void){
             LOG_INF("Urat is not ok: %d", rat);
             // will change urat to NB-IoT
             LOG_INF("Setting urat to: %d", U_CELL_NET_RAT_NB1);
-            ret = uCellCfgSetRat(gNetHandle, U_CELL_NET_RAT_NB1);
+            ret = uCellCfgSetRat(gDevHandle, U_CELL_NET_RAT_NB1);
 
             if( ret == 0 ){
                 LOG_INF("Rebooting module \r\n");
-                ret = uCellPwrReboot(gNetHandle, NULL);
+                ret = uCellPwrReboot( gDevHandle, NULL );
                 if(ret<0){
                     return ret;
                 }
@@ -277,7 +238,7 @@ static int32_t xCellSaraRegistrationConfig(void){
         // (this is implied by command: AT+URAT=9,7)
         // in SARA-R5 only AT+URAT=9 is NOT supported, so we set it to 7 <LTE Cat M1>
         
-        uCellNetRat_t rat = uCellCfgGetRat(gNetHandle, 0);
+        uCellNetRat_t rat = uCellCfgGetRat(gDevHandle, 0);
 
         if( rat == U_CELL_NET_RAT_CATM1 ){
             LOG_INF("Urat is ok: %d", rat);
@@ -286,11 +247,11 @@ static int32_t xCellSaraRegistrationConfig(void){
             LOG_INF("Urat is not ok: %d", rat);
             // will change urat to NB-IoT
             LOG_INF("Setting urat to: %d", U_CELL_NET_RAT_CATM1);
-            ret = uCellCfgSetRat(gNetHandle, U_CELL_NET_RAT_CATM1);
+            ret = uCellCfgSetRat(gDevHandle, U_CELL_NET_RAT_CATM1);
 
             if( ret == 0 ){
                 LOG_INF("Rebooting module \r\n");
-                ret = uCellPwrReboot(gNetHandle, NULL);
+                ret = uCellPwrReboot( gDevHandle, NULL);
                 if(ret<0){
                     return ret;
                 }
@@ -310,6 +271,30 @@ static int32_t xCellSaraRegistrationConfig(void){
 
 void xCellSaraInitThread(void){
 
+    err_code err;
+
+    // Cellular device configuration to work with ubxlib
+    static const uDeviceCfg_t deviceCfg = {
+        .deviceType = U_DEVICE_TYPE_CELL,
+        .deviceCfg = {
+            .cfgSho = {
+                .moduleType = U_CELL_MODULE_TYPE_SARA_R5
+            }
+        },
+        .transportType = U_DEVICE_TRANSPORT_TYPE_UART,
+        .transportCfg = {
+            .cfgUart = {
+                .uart = SARA_UART,
+                .baudRate = SARA_UART_BAUDRATE,
+                .pinTxd = -1,  
+                .pinRxd = -1,
+                .pinCts = -1,
+                .pinRts = -1
+            }
+        }
+    };
+    
+
     // needed to avoid thread overflows when using ubxlib functions within a thread
     k_thread_system_pool_assign(k_current_get());
 
@@ -317,10 +302,19 @@ void xCellSaraInitThread(void){
         // Semaphore given by xCellSaraInit()
         k_sem_take( &xCellSaraInit_semaphore, K_FOREVER );
 
+        LOG_DBG("SARAR5 device init request \r\n");
+
+        // The initialization thread ends up in a uDeviceOpened status
+        // if the module status is already there, no need to init again
+        if( gSaraStatus.uStatus == uDeviceOpened ){
+            LOG_INF("Already Initialized\r\n");
+            gLastOperationResult = X_ERR_SUCCESS;
+            continue;
+        }
+
         // if WiFi is using ubxlib, abort 
         //( Wifi should be deinitiliazed fisrt )
         if( xCommonUPortIsInit() ){
-
             xWifiNinaStatus_t ninaStatus = xWifiNinaGetModuleStatus();
             if( ninaStatus.uStatus >= uPortInitialized ){
                 // deinitialize previous uPort to config SARA
@@ -352,43 +346,33 @@ void xCellSaraInitThread(void){
         }
 
         gSaraStatus.uStatus = uPortInitialized;
-        LOG_INF("Port Initialized\r\n");
 
-        // Network Initialization - Configuration
-        gLastOperationResult = uNetworkInit();
-        if( gLastOperationResult != X_ERR_SUCCESS ){
-            saraErrorHandle( gLastOperationResult );
-            continue; //err
-        }
-        gSaraStatus.uStatus = uNetInitialized;
-
-        // add approprtiate configuration according to plan selected
-        if( gMqttSnActivePlan == FLEX ){
-            gNetHandle = uNetworkAdd(U_NETWORK_TYPE_CELL, (void *) &gCellSaraFlexConfig);
-        }
-        else if( gMqttSnActivePlan == ANYWHERE ){
-            gNetHandle = uNetworkAdd(U_NETWORK_TYPE_CELL, (void *) &gCellSaraAnywhereConfig);
-        }
-
-        if( gNetHandle < 0 ){
-            LOG_ERR("networkAdd error: %d\r\n",gNetHandle);
-            saraErrorHandle( gNetHandle );
+        // Initialize Device API in ubxlib
+        if( ( err = uDeviceInit() ) != X_ERR_SUCCESS ){ 
+            LOG_ERR("SARAR5 uDeviceInit failed\n");
+            saraErrorHandle( err ); 
             continue;
         }
-        else{
-            LOG_INF("Network Added\r\n");
-            gSaraStatus.uStatus = uNetAdded;
-        }
 
-        // Cellular Configuration that might be needed before connecting to a
-        // mobile network provider
-        gLastOperationResult = xCellSaraRegistrationConfig();
-        if( gLastOperationResult != X_ERR_SUCCESS ){
-            saraErrorHandle( gLastOperationResult );
+        gSaraStatus.uStatus = uDeviceApiInitialized;
+
+        // Open Device and keep a copy of the credentials used
+        err = uDeviceOpen( &deviceCfg, &gDevHandle);
+
+        // If device could not be opened
+        if( err < 0){
+            LOG_ERR("Could not Open Cellular Device\r\n");
+            gDevHandle = NULL;
+            saraErrorHandle( err );
             continue;
         }
+
+        // Device succesfully opened
+        gSaraStatus.uStatus = uDeviceOpened;
+        LOG_INF("Cellular device and opened\r\n");
 
         gSaraStatus.isReadyToConnect = true;
+        gLastOperationResult = X_ERR_SUCCESS;
         xLedOff();         
     }
 }
@@ -422,12 +406,32 @@ void xCellSaraDeinitThread(void){
 
 void xCellSaraConnectThread(void){
 
+    // Structure that contains the connection parameters/configuration
+    // when user wants to connect to MQTT Anywhere using a Thingstream SIM
+    // card
+    static const uNetworkCfgCell_t gNetworkCfgAnywhere = {
+            .type = U_NETWORK_TYPE_CELL,
+            .pApn = CELL_APN_ANYWHERE,
+            .timeoutSeconds = CELL_CONNECTION_TIMEOUT
+    };
+
+    // Structure that contains the connection parameters/configuration
+    // when user wants to connect to MQTT Flex using a 3rd party SIM
+    // card
+    static const uNetworkCfgCell_t gNetworkCfgFlex = {
+            .type = U_NETWORK_TYPE_CELL,
+            .pApn = CELL_APN_FLEX,
+            .timeoutSeconds = CELL_CONNECTION_TIMEOUT
+    };
+
+
     while(1){
 
         // Semaphore given by xCellSaraConnect
         k_sem_take( &xCellSaraConnect_semaphore, K_FOREVER );
 
-        // if not ready to connect, prepare module for connection request
+        // if not ready to connect, prepare module for connection request (open cell device
+        // in ubxlib)
         gLastOperationResult = X_ERR_SUCCESS;
         if( !gSaraStatus.isReadyToConnect ){
             xCellSaraInit();
@@ -441,14 +445,30 @@ void xCellSaraConnectThread(void){
 
         // optical indication
         xLedFade(CELL_ACTIVATING_LEDCOL, CELL_ACTIVATING_LED_DELAY_ON, CELL_ACTIVATING_LED_DELAY_OFF, 0);
+
+        // Cellular Configuration that might be needed before connecting to a
+        // mobile network operator --> such as setting URAT configuration...
+        gLastOperationResult = xCellSaraRegistrationConfig();
+        if( gLastOperationResult != X_ERR_SUCCESS ){
+            saraErrorHandle( gLastOperationResult );
+            continue;
+        }
         
         //register callbacks
-        uCellNetSetRegistrationStatusCallback(gNetHandle,saraRegisterCb,NULL);
-        uCellNetSetBaseStationConnectionStatusCallback(gNetHandle, saraConnectCb,NULL);
+        uCellNetSetRegistrationStatusCallback(gDevHandle,saraRegisterCb,NULL);
+        uCellNetSetBaseStationConnectionStatusCallback(gDevHandle, saraConnectCb,NULL);
 
         // Bring up the network layer
-        LOG_INF("Connecting to network \r\n");
-        gLastOperationResult = uNetworkUp( gNetHandle );
+        LOG_INF("Connecting to operator/network \r\n");
+        
+        if( gMqttSnActivePlan == FLEX ){
+            gLastOperationResult = uNetworkInterfaceUp( gDevHandle, U_NETWORK_TYPE_CELL, &gNetworkCfgFlex );
+        } 
+        else if( gMqttSnActivePlan == ANYWHERE ){
+            gLastOperationResult = uNetworkInterfaceUp( gDevHandle, U_NETWORK_TYPE_CELL, &gNetworkCfgAnywhere );
+        }
+        
+        // Check for errors
         if( gLastOperationResult != X_ERR_SUCCESS ){
             LOG_WRN("Connect to network err code: %d \r\n", gLastOperationResult );    
             saraErrorHandle( gLastOperationResult );
@@ -468,15 +488,15 @@ static void saraDisconnect(void){
 
     LOG_INF("Cell Network Down request\r\n");
 
+    // optical indication
     xLedFade(CELL_DEACTIVATING_LEDCOL, CELL_ACTIVATING_LED_DELAY_ON, CELL_ACTIVATING_LED_DELAY_OFF, 0);
-    
-    // this function also powers off the module, so we should also deinit after using it
-    int32_t ret = uNetworkDown(gNetHandle);
-    if( ret != X_ERR_SUCCESS ){
-        LOG_ERR("Error while bringing network down: %d \r\n", ret);
-    } 
 
-    LOG_INF("Cell Netowrk Down\r\n" );
+    gLastOperationResult = uNetworkInterfaceDown( gDevHandle, U_NETWORK_TYPE_CELL );
+    if(gLastOperationResult != U_ERROR_COMMON_SUCCESS){
+        LOG_ERR("uNetworkInterfaceDown error: %d \r\n", gLastOperationResult);
+    }
+
+    LOG_INF("Cell Network Down\r\n" );
     gSaraStatus.isConnected = false;
     gSaraStatus.isRegistered = false;
     gSaraStatus.isReadyForMqttSN = false;
@@ -610,9 +630,9 @@ void xCellSaraDeinit(void){
 }
 
 
-void xCellSaraNetworkDeinit(void){
+void xCellSaraDeviceClose(void){
 
-    LOG_INF("SARA Network Deinit request\r\n");
+    LOG_INF("SARA Device close request\r\n");
 
     // check Mqtt-SN status and close if necessary prior to
     // deinitializing the network
@@ -638,12 +658,21 @@ void xCellSaraNetworkDeinit(void){
         //wait for disconnection    
     }
 
+    // Send command to gracefully power off SARA module. Need to call this
+    // before closing the Device with uDeviceClose()
+    if( uCellPwrOff(gDevHandle,NULL) < U_ERROR_COMMON_SUCCESS ){
+        LOG_WRN("Error in uCellPwrOff: Continue anyway \r\n");
+    }
+
+    // Shut-down the cellular device
+    uDeviceClose( gDevHandle, false );
+    uDeviceDeinit();
+
     xLedFade(CELL_DEACTIVATING_LEDCOL, CELL_ACTIVATING_LED_DELAY_ON, CELL_ACTIVATING_LED_DELAY_OFF, 0);
 
-    uNetworkDeinit(); //you can also just remove the network
     gSaraStatus.isReadyToConnect = false;
     gSaraStatus.uStatus = uPortInitialized;
-    LOG_INF("Net Deinitialized \r\n");
+    LOG_INF("Cell Device Closed \r\n");
 
     xLedOff();
 
@@ -651,15 +680,15 @@ void xCellSaraNetworkDeinit(void){
 
 
 
-int32_t xCellSaraGetHandle( void ){
+uDeviceHandle_t xCellSaraGetHandle( void ){
     
-    if( gSaraStatus.uStatus < uNetAdded ){
-        LOG_WRN("GetNetworkHandle error: Net not Added yet");
-        return -1; //to do: return negative err code?
+    if( gSaraStatus.uStatus < uDeviceOpened ){
+        LOG_WRN("GetDeviceHandle error: Device not Added yet");
+        return NULL;
     }
 
     else{
-        return gNetHandle;
+        return gDevHandle;
     }
 }
 

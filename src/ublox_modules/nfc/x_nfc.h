@@ -41,6 +41,19 @@
 
 
 /* ----------------------------------------------------------------
+ * TYPE DEFINITIONS
+ * -------------------------------------------------------------- */
+
+/** Enum that describes NORA-B1 BLE status.
+ */
+typedef enum{
+   xNfcNotConfigured = 0,   /**< NFC not yet configured */
+   xNfcClose,               /**< NFC not activated */
+   xNfcOpen                 /**< NFC activated */
+}xNfcStatus_t;
+
+
+/* ----------------------------------------------------------------
  * FUNCTIONS
  * -------------------------------------------------------------- */
 
@@ -60,6 +73,20 @@ err_code xNfcConfig(void);
  */
 err_code xNfcInit(void);
 
+
+
+/** Deactivates NFC frontend and stops sensing NFC field.
+ *
+ * @return        zero on success else negative error code.
+ */
+err_code xNfcDeinit(void);
+
+
+/** Get Nfc status in the form of an xNfcStatus_t enum
+ *
+ * @return        Nfc status in the form of xNfcStatus_t enum.
+ */
+xNfcStatus_t xNfcGetStatus(void);
 
 
 #endif  //X_NFC_H__

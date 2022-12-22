@@ -26,6 +26,21 @@
 
 #include "stdint.h"
 #include "x_errno.h"
+#include <shell/shell.h>     //for shell command functions
+
+
+/* ----------------------------------------------------------------
+ * TYPE DEFINITIONS
+ * -------------------------------------------------------------- */
+
+/** Enum that describes NORA-B1 BLE status.
+ */
+typedef enum{
+   xBleNotInitialized = 0,  /**< BLE stack not yet initialized */
+   xBleIsInitialized,       /**< BLE stack initialized, not advertising or connected */
+   xBleIsAdvertising,       /**< BLE is advertising */
+   xBleIsConnected          /**< BLE connected */
+}xBleStatus_t;
 
 
 /* ----------------------------------------------------------------
@@ -36,14 +51,69 @@
 /** This function configures BLE functionality for Sensor Aggregation
  * use case and starts BLE advertising. It basically configures a modified
  * Nordic Uart Service as implemented in Nordic's "ble peripheral uart" example.
- * In this modified example, data received from BLE via this Service are typed 
- * immediately in the uart console. The user cannot send data from XPLR-IOT-1
- * to the connected BLE device.
+ * In this modified example, data received from BLE via this Service are considered
+ * commands from u-blox mobile application and are passed to a BLE command handler for 
+ * processing.
  *
  * @return        zero on success else negative error code.
  */
 err_code xBleInit(void);
 
+
+/** Start advertising via BLE. If already advertising (or connected)
+ * this function has no effect. BLE stack should be initialized first
+ * by using xBleInit().
+ * 
+ * * @return 		zero on success else negative error code.
+*/
+err_code xBleStartAdvertising(void);
+
+
+/** Get NORA-B1 BLE module status 
+ *
+ * @return        xBleStatus_t enum describing BLE status
+ */
+xBleStatus_t xBleGetStatus(void);
+
+
+/* ----------------------------------------------------------------
+ * FUNCTIONS IMPLEMENTING SHELL-COMMANDS
+ * -------------------------------------------------------------- */
+
+
+/** This function is intented only to be used as a command executed by the shell.
+ * The params are only needed because the function types using the shell_print funtion.
+ * This command essentially starts BLE advertising. If BLE stack needs to initialize, it
+ * also initializes BLE stack.
+ * 
+ * @param shell  the shell instance from which the command is given (and to which the command types).
+ * @param argc   the number of parameters given along with the command (none expected).
+ * @param argv   the array including the parameters themselves (none expected).
+ */
+void xBleEnableCmd(const struct shell *shell, size_t argc, char **argv);
+
+
+/** This function is intented only to be used as a command executed by the shell.
+ * The params are only needed because the function types using the shell_print funtion.
+ * This command function essentially (disconnects and) disables BLE advertising.
+ * 
+ * @param shell  the shell instance from which the command is given (and to which the command types).
+ * @param argc   the number of parameters given along with the command (none expected).
+ * @param argv   the array including the parameters themselves (none expected).
+ */
+void xBleDisableCmd(const struct shell *shell, size_t argc, char **argv);
+
+
+/** This function is intented only to be used as a command executed by the shell.
+ * The params are only needed because the function types using the shell_print funtion.
+ * This command disconnects from any connected BLE device. If not connected anywhere, this 
+ * command has no effect
+ * 
+ * @param shell  the shell instance from which the command is given (and to which the command types).
+ * @param argc   the number of parameters given along with the command (none expected).
+ * @param argv   the array including the parameters themselves (none expected).
+ */
+void xBleDisconnectCmd(const struct shell *shell, size_t argc, char **argv);
 
 
 

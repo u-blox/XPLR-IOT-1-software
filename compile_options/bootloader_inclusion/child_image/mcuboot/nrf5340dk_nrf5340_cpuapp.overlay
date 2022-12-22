@@ -1,4 +1,4 @@
- / {
+/ {
 	chosen {
 		nordic,pm-ext-flash = &mx25r64;
 	};
@@ -61,22 +61,16 @@
 		label = "BME280";
 	};
 
-	adxl345@1D {
-		compatible = "adi,adxl345";
-		reg = <0x1D>;
-		label = "ADXL345";
-	};
-
 	lis3mdl@1E {
 		compatible = "st,lis3mdl-magn";
 		reg = <0x1E>;
 		label = "LIS3MDL";
 	};
 
-	fxas21002@20 {
-		compatible = "nxp,fxas21002";
-		reg = <0x20>;
-		label = "FXAS21002";
+	icg20330: icg20330@68 {
+		compatible = "tdk,icg20330";
+		reg = <0x68>;
+		label = "ICG20330";
 	};
 
 	lis2dh@19 {
@@ -91,6 +85,14 @@
 		label = "LTR303"; 
 	};
 
+	// Its either bq27520 or bq27421 battery gauge
+	bq27520: bq27520@55 {
+		compatible = "ti,bq27520";
+		label = "BQ27520";
+		reg = <0x55>;
+	};
+
+	// Its either bq27520 or bq27421 battery gauge
 	bq27421@55 {
 		compatible = "ti,bq274xx";
 		label = "BQ274XX";
@@ -100,6 +102,7 @@
 		taper-current = <45>;
 		terminate-voltage = <3000>;
 	};
+
 };
 
 // console uart
@@ -116,7 +119,7 @@
 // MaxM10S uart
 &uart3 {
 	status = "okay";
-	current-speed = <38400>;
+	current-speed = <9600>;//38400
 	tx-pin = <45>;
 	rx-pin = <46>;
 };
@@ -143,7 +146,6 @@
 	gpios = <&gpio0 28 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
 	label = "Push button 2";
 };
-
 
 //PWM for Led control brightness
 &pwm0 {
@@ -177,4 +179,3 @@
 
 			
 };
-

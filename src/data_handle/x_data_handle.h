@@ -31,12 +31,11 @@
  * 
  * The sensor data is sent in a JSON string. An example of such a JSON string is given below:
  * 
- * {"Dev":"C210","Sensors":[{"ID":"BQ27421","err":"fetch"},{"ID":"BME280","mes":[{"nm":"Tm","vl":32.250},
- * {"nm":"Hm","vl":37.993},{"nm":"Pr","vl":98.905}]},{"ID":"FXAS21002","mes":[{"nm":"Gx","vl":-0.015},
+ * {"Dev":"C210","Sensors":[{"ID":"BATTERY","err":"fetch"},{"ID":"BME280","mes":[{"nm":"Tm","vl":32.250},
+ * {"nm":"Hm","vl":37.993},{"nm":"Pr","vl":98.905}]},{"ID":"ICG20330","mes":[{"nm":"Gx","vl":-0.015},
  * {"nm":"Gy","vl":0.001},{"nm":"Gz","vl":0.008}]},{"ID":"LIS2DH12","mes":[{"nm":"Ax","vl":1.149},
  * {"nm":"Ay","vl":-1.302},{"nm":"Az","vl":-9.270}]},{"ID":"LIS3MDL","mes":[{"nm":"Mx","vl":-1.587},
  * {"nm":"My","vl":-0.081},{"nm":"Mz","vl":0.432}]},{"ID":"LTR303","mes":[{"nm":"Lt","vl":106}]},
- * {"ID":"ADXL345","mes":[{"nm":"Ax","vl":31.000},{"nm":"Ay","vl":-156.000},{"nm":"Az","vl":-906.000}]},
  * {"ID":"MAXM10","err":"timeout"}]}
  * 
  * 
@@ -89,24 +88,22 @@ if <hex_mode>=0 or 512 octets if <hex_mode>=1. [ UBX-19047455 - R09 page.415 ] *
 
 //define topics per sensor
 #define TOPIC_NAME_BME280        "c210/sensor/environmental"
-#define TOPIC_NAME_BQ27421       "c210/sensor/battery"
-#define TOPIC_NAME_ADXL345       "c210/sensor/accelerometer/adxl345"    
+#define TOPIC_NAME_BQ27520       "c210/sensor/battery"
 #define TOPIC_NAME_LIS2DH12      "c210/sensor/accelerometer/lis2dh12"
 #define TOPIC_NAME_LIS3MDL       "c210/sensor/magnetometer"
 #define TOPIC_NAME_LTR303        "c210/sensor/light"
-#define TOPIC_NAME_FXAS21002     "c210/sensor/gyroscope"
+#define TOPIC_NAME_ICG20330     "c210/sensor/gyroscope"
 #define TOPIC_NAME_MAXM10S       "c210/position/nmea"
 #define TOPIC_NAME_ALL_SENSORS   "c210/all"
 
 // define topic aliases per sensor (should also be defined in thingstream -
 // should be done upon entering the redemption code)
 #define TOPIC_ALIAS_BME280      "501"    
-#define TOPIC_ALIAS_BQ27421     "502"   
-#define TOPIC_ALIAS_ADXL345     "503"    
+#define TOPIC_ALIAS_BQ27520     "502"   
 #define TOPIC_ALIAS_LIS2DH12    "504"    
 #define TOPIC_ALIAS_LIS3MDL     "505"    
 #define TOPIC_ALIAS_LTR303      "506" 
-#define TOPIC_ALIAS_FXAS21002   "507"    
+#define TOPIC_ALIAS_ICG20330    "507"    
 #define TOPIC_ALIAS_MAXM10S     "508"
 #define TOPIC_ALIAS_ALL_SENSORS "500"
 
@@ -153,12 +150,11 @@ if <hex_mode>=0 or 512 octets if <hex_mode>=1. [ UBX-19047455 - R09 page.415 ] *
 // define sensor names (IDs) as they are used in JSON messages etc
 // (independent of the sensor labels in the device tree)
 #define JSON_ID_SENSOR_BME280    "BME280"  
-#define JSON_ID_SENSOR_ADXL345   "ADXL345"
-#define JSON_ID_SENSOR_BQ27421   "BQ27421"
+#define JSON_ID_SENSOR_BATTERY   "BATTERY"
 #define JSON_ID_SENSOR_LIS2DH12  "LIS2DH12"
 #define JSON_ID_SENSOR_LIS3MDL   "LIS3MDL"
 #define JSON_ID_SENSOR_LTR303    "LTR303"
-#define JSON_ID_SENSOR_FXAS21002 "FXAS21002"
+#define JSON_ID_SENSOR_ICG20330  "ICG20330"
 #define JSON_ID_SENSOR_MAXM10    "MAXM10"
 
 

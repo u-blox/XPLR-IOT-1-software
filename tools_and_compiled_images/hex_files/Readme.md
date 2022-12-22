@@ -1,8 +1,8 @@
 ## Compiled hex files
 
 In this folder compiled images of the project are provided
-* 'SensorAggregation_v0.3_MergedCores.hex' contains the application alone.
-* 'SensorAggregation_v0.3_Bootloader_MergedCores.hex' contains the application and the bootloader.
+* 'SensorAggregation_v1.0_MergedCores.hex' contains the application alone.
+* 'SensorAggregation_v1.0_Bootloader_MergedCores.hex' contains the application and the bootloader.
 
 These images contain the merged images for both Application and Network Cores of NORA-B1.
 

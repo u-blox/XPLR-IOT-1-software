@@ -25,8 +25,7 @@
 #include <logging/log.h>
 #include <stdlib.h>  //atoi
 
-#include "u_mqtt_common.h"
-#include "u_mqtt_client.h"
+#include "ubxlib.h"
 
 #include "x_module_common.h"
 #include "x_wifi_ninaW156.h"
@@ -98,8 +97,10 @@ uMqttClientContext_t *gMqttClientCtx;
 /**Holds MQTT client status in terms of Sensor Aggregation application*/
 static xClientStatusStruct_t gMqttStatus = {.type = MqttClient, .status = ClientClosed };
 
-/** Holds the result of the last operation performed by this module (refers to operations that need to report their result
- *  to other modules of the application and cannot report their results directly e.g. a thread operation) */
+/** Holds the result of the last operation performed by this module (refers to operations
+ *  that need to report their result to other modules of the application and cannot report
+ *  their results directly e.g. a thread operation)
+*/
 static err_code gLastOperationResult = X_ERR_SUCCESS;
 
 // MQTT client configuration strings
@@ -631,4 +632,48 @@ void xWifiMqttSendCmd(const struct shell *shell, size_t argc, char **argv){
         }
 
 		return;
+}
+
+
+
+
+err_code xWifiMqttDeleteConfig( void ){
+
+    err_code rc;
+    err_code ret = 0;
+    bool notFound = false;
+
+    rc = xStorageDeleteFile( mqtt_deviceID_fname ); 		
+    if( rc == ERR_STORAGE_FILE_NOT_FOUND ){
+        notFound = true;
+    }
+    else if( rc < 0 ){
+        ret = rc;
+    }
+    
+    rc = xStorageDeleteFile( mqtt_username_fname );
+    if( rc == ERR_STORAGE_FILE_NOT_FOUND ){
+        notFound = true;
+    }
+    else if( rc < 0 ){
+        ret = rc;
+    }
+
+    rc = xStorageDeleteFile( mqtt_psw_fname );  	
+    if( rc == ERR_STORAGE_FILE_NOT_FOUND ){
+        notFound = true;
+    }
+    else if( rc < 0 ){
+        ret = rc;
+    }
+
+    // If even one of the delete functions returns ERR_STORAGE_FILE_NOT_FOUND
+    // then this error is returned (a full configuration for mqtt was not saved)
+    if( notFound ){
+        return ERR_STORAGE_FILE_NOT_FOUND;
+    }
+
+    // if one of the delete functions returned an error code, return this code
+    // if more than one delete functions returned an error code, then return the last one
+    return ret;
 }

@@ -31,7 +31,8 @@
 #include <logging/log_ctrl.h> //log_process
 
 // Ubxlib related
-#include "u_port.h"
+//#include "u_port.h"
+#include "ubxlib.h"
 
 // Application related
 #include "x_logging.h"
@@ -144,18 +145,18 @@ void xCommonUPortDeinitThread(void){
         // also handle mqtt client
         xWifiNinaStatus_t ninaStatus = xWifiNinaGetModuleStatus();
 
-        if( ninaStatus.uStatus >= uNetInitialized ){
-            xWifiNinaNetworkDeinit();
+        if( ninaStatus.uStatus >= uDeviceApiInitialized ){
+            xWifiNinaDeviceClose();
         }
 
         // get Cellular network initialization status and close (SARA)
         // if necessary. Also handles MQTT-SN client
         xCellSaraStatus_t saraStatus = xCellSaraGetModuleStatus();
 
-        if( saraStatus.uStatus >= uNetInitialized ){
-            xCellSaraNetworkDeinit();
+        if( saraStatus.uStatus >= uDeviceApiInitialized ){
+            xCellSaraDeviceClose();
 
-            while( ( saraStatus.uStatus >= uNetInitialized ) ){   
+            while( ( saraStatus.uStatus >= uDeviceApiInitialized ) ){   
                 k_sleep(K_MSEC(1000));
                 saraStatus = xCellSaraGetModuleStatus();
                 //we do not check errors here

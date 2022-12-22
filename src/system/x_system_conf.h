@@ -26,14 +26,18 @@
  */
 
 
-#define FIRMWARE_VERSION_MAJOR    0
-#define FIRMWARE_VERSION_MINOR    3
+#define FIRMWARE_VERSION_MAJOR    1
+#define FIRMWARE_VERSION_MINOR    0
+
+/* This is used to distinguish internal versions between releases. It should
+ALWAYS be 0 in released/public versions*/
+#define FIRMWARE_VERSION_INTERNAL 0
 
 
 // Sensor Threads
-#define BQ27421_PRIORITY     7
-#define BQ27421_STACK_SIZE   2048
-#define BQ27421_DEFAULT_UPDATE_PERIOD_MS   10000  /**< Refers to single sensor sampling,
+#define BAT_GAUGE_PRIORITY     7
+#define BAT_GAUGE_STACK_SIZE   2048
+#define BAT_GAUGE_DEFAULT_UPDATE_PERIOD_MS   10000  /**< Refers to single sensor sampling,
                                                        not sensor aggregation */
 
 #define LIS2DH12_PRIORITY    7
@@ -41,14 +45,9 @@
 #define LIS2DH12_DEFAULT_UPDATE_PERIOD_MS   10000 /**< Refers to single sensor sampling,
                                                        not sensor aggregation */
 
-#define ADXL345_PRIORITY    7
-#define ADXL345_STACK_SIZE  2048
-#define ADXL345_DEFAULT_UPDATE_PERIOD_MS   10000 /**< Refers to single sensor sampling,
-                                                       not sensor aggregation */
-
-#define FXAS21002_PRIORITY    7
-#define FXAS21002_STACK_SIZE  2048
-#define FXAS21002_DEFAULT_UPDATE_PERIOD_MS   10000 /**< Refers to single sensor sampling,
+#define ICG20330_PRIORITY    7
+#define ICG20330_STACK_SIZE  2048
+#define ICG20330_DEFAULT_UPDATE_PERIOD_MS   10000 /**< Refers to single sensor sampling,
                                                        not sensor aggregation */
 
 #define BME280_PRIORITY    7
@@ -82,7 +81,7 @@
 #define MQTT_STACK_SIZE     1024
 
 #define MQTTSN_PRIORITY        7
-#define MQTTSN_STACK_SIZE     1024
+#define MQTTSN_STACK_SIZE     2048
 
 #define MAXM10S_PRIORITY                       7
 #define MAXM10S_COMPLETE_POS_PRIORITY          7 
@@ -107,6 +106,10 @@
 #define SENS_AGG_DEFAULT_UPDATE_PERIOD_MS    20000 /**< Refers to sensor aggregation,
                                                         all sensors sampled with the same
                                                         period */
+
+// BLE Command Execution Threads
+#define BLE_CMD_EXEC_PRIORITY    7
+#define BLE_CMD_EXEC_STACK_SIZE  2048
 
 
 #endif    //X_SYSTEM_CONF_H__

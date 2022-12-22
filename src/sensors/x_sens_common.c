@@ -24,9 +24,8 @@
 #include "x_sens_common.h"
 
 #include "x_sens_bme280.h"
-#include "x_sens_adxl345.h"
-#include "x_sens_bq27421.h"
-#include "x_sens_fxas21002.h"
+#include "x_sens_battery_gauge.h"
+#include "x_sens_icg20330.h"
 #include "x_sens_lis3mdl.h"
 #include "x_sens_lis2dh12.h"
 #include "x_sens_ltr303.h"
@@ -45,12 +44,11 @@
 void xSensEnableAll(void){
 
     xSensBme280Enable();
-    xSensAdxl345Enable();
     xSensLis3mdlEnable();
-    xSensFxas21002Enable();
+    xSensIcg20330Enable();
     xSensLis2dh12Enable();
     xSensLtr303Enable();
-    xSensBq27421Enable();
+    xSensBatGaugeEnable();
     xPosMaxM10Enable();
     return;
 }
@@ -60,12 +58,11 @@ void xSensEnableAll(void){
 void xSensDisableAll(void){
 
     xSensBme280Disable();
-    xSensAdxl345Disable();
     xSensLis3mdlDisable();
-    xSensFxas21002Disable();
+    xSensIcg20330Disable();
     xSensLis2dh12Disable();
     xSensLtr303Disable();
-    xSensBq27421Disable();
+    xSensBatGaugeDisable();
     xPosMaxM10Disable();
     return;
 }
@@ -80,10 +77,9 @@ err_code xSensSetUpdatePeriodAll(uint32_t milliseconds){
         return err;
     }
 
-    xSensAdxl345SetUpdatePeriod( milliseconds );
     xSensBme280SetUpdatePeriod( milliseconds );
-    xSensBq27421SetUpdatePeriod( milliseconds );
-    xSensFxas21002SetUpdatePeriod( milliseconds );
+    xSensBatGaugeSetUpdatePeriod( milliseconds );
+    xSensIcg20330SetUpdatePeriod( milliseconds );
     xSensLis2dh12SetUpdatePeriod( milliseconds );
     xSensLis3mdlSetUpdatePeriod( milliseconds );
     xSensLtr303SetUpdatePeriod( milliseconds );
@@ -96,12 +92,11 @@ err_code xSensSetUpdatePeriodAll(uint32_t milliseconds){
 void xSensPublishAll(void){
         
         xSensBme280EnablePublish(true);
-        xSensAdxl345EnablePublish(true);
         xSensLis3mdlEnablePublish(true);
-        xSensFxas21002EnablePublish(true);
+        xSensIcg20330EnablePublish(true);
         xSensLis2dh12EnablePublish(true);
         xSensLtr303EnablePublish(true);
-        xSensBq27421EnablePublish(true);
+        xSensBatGaugeEnablePublish(true);
         xPosMaxM10EnablePublish(true);
 }
 
@@ -110,12 +105,11 @@ void xSensPublishAll(void){
 void xSensPublishNone(void){
         
         xSensBme280EnablePublish(false);
-        xSensAdxl345EnablePublish(false);
         xSensLis3mdlEnablePublish(false);
-        xSensFxas21002EnablePublish(false);
+        xSensIcg20330EnablePublish(false);
         xSensLis2dh12EnablePublish(false);
         xSensLtr303EnablePublish(false);
-        xSensBq27421EnablePublish(false);
+        xSensBatGaugeEnablePublish(false);
         xPosMaxM10EnablePublish(false);
 }
 

@@ -20,4 +20,4 @@ Also, all these modules are handled using ubxlib library in the code. That creat
 These are functions implemented in NORA-B1 module and their existence is not mandatory for the functionality of Sensor Aggregation Use Case application. They are just added for demonstration/testing purposes.
 
 -	[NFC Functionality](./nfc/) (handles NFC)
--	[BLE Functionality](./ble/) (handles BLE)
+-	[Bluetooth LE Functionality](./ble/) (handles Bluetooth LE)

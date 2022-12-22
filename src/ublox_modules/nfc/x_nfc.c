@@ -67,6 +67,11 @@ uint16_t gUriLen = sizeof( gUriData );
 static uint8_t gNdefMsgBuf[NDEF_MSG_BUF_SIZE];
 
 
+/**Gloval Nfc Status holder */
+xNfcStatus_t gNfcStatus = xNfcNotConfigured;
+
+
+
 
 /* ----------------------------------------------------------------
  * CALLBACKS
@@ -125,6 +130,7 @@ err_code xNfcConfig(void){
 		return err;
 	}
 
+	gNfcStatus = xNfcClose;
 	LOG_INF("NFC configuration done\n");
     return err;
 }
@@ -135,6 +141,17 @@ err_code xNfcInit(void){
 
     int32_t err; 
 
+	// if not yet configured
+	if( gNfcStatus == xNfcNotConfigured ){
+		LOG_ERR("Cannot init/open NFC, use xNfcConfig() first\r\n");
+		return X_ERR_INVALID_STATE;
+	}
+
+	if( gNfcStatus == xNfcOpen){
+		LOG_INF("NFC already open");
+		return X_ERR_INVALID_STATE;
+	}
+
     /* Start sensing NFC field */
 	if ( ( err = nfc_t2t_emulation_start() ) < 0 ) {
 		LOG_ERR("Cannot start emulation!\n");
@@ -143,6 +160,39 @@ err_code xNfcInit(void){
 
 
 	LOG_INF("NFC started\n");
+	gNfcStatus = xNfcOpen;
+    return X_ERR_SUCCESS;
+
+}
+
+
+err_code xNfcDeinit(void){
+
+	int32_t err; 
+
+	// is configured?
+	if( gNfcStatus == xNfcNotConfigured ){
+		return X_ERR_INVALID_STATE;
+	}
+
+	// is already closed?
+	if( gNfcStatus == xNfcClose){
+		return X_ERR_INVALID_STATE;
+	}
+
+    /* Stop sensing NFC field */
+	if ( ( err = nfc_t2t_emulation_stop() ) < 0 ) {
+		LOG_ERR("Stop NFC emulation error :%d \n", err );
+		return err;
+	}
+
+	LOG_INF("NFC stoped \n");
+	gNfcStatus = xNfcClose;
     return err;
 
+}
+
+
+xNfcStatus_t xNfcGetStatus(void){
+	return gNfcStatus;
 }

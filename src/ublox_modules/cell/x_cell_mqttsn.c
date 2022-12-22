@@ -30,10 +30,7 @@
 #include <stdio.h> //sprintf
 
 //Ubxlib related
-#include "u_at_client.h"
-#include "u_cell_sec_tls.h"
-#include "u_security_tls.h" //redundant?
-#include "u_cell.h" // uCellAtClientHandleGet
+#include "ubxlib.h"
 
 //Application related
 #include "x_system_conf.h"
@@ -53,37 +50,48 @@
 */
 void xCellMqttSnClientOpenThread(void);
 
+
 /** Thread called by xCellMqttSnClientConnect(). Performs all necessary operations
  * to connect to the MQTT Broker
 */
 void xCellMqttSnClientConnectThread(void);
 
+
 /** Handle error happening in a thread
 */
 static void mqttSnErrorHandle(err_code err_code);
 
-/** Configure MQTT-SN client to connect to Thingstream platform
- * via MQTT Anywhere plan
-*/
-static int32_t mqttSnConfigAnywherePlan(void);
 
-/** Configure MQTT-SN client to connect to Thingstream platform
- * via MQTT Flex plan
+/** Configure MQTT-SN client TLS security (certificate, key) to connect to
+ *  Thingstream platform via MQTT Flex plan 
+ * 
+ *  Prerequisites: you have to save the certificate and key in SARA module
+ *  file system using m-center (or AT commands), and then use function
+ *  mqttSnImportCertKeyFiles, or send the following commands before this works
+ *  properly:
+ *  - AT+USECMNG=1,1,"Some_name","cert.pem" 
+ *  - AT+USECMNG=1,2,"Some_other_name", "cert.key"
+ * 
+ * @return     zero on success, negative error code otherwise
 */
-static int32_t mqttSnConfigFlexPlan(void);
+static err_code mqttSnConfigFlexTLSSecurity( void );
 
-/** When Publishing a message, if normal Topic Type is used the topic
-*   should be registered prior to publishing. This function Registers
-*   this topic
+
+/** Used only for MQTT Flex.
+ *  Import the client key and certificate to be used, from files saved in cellular
+ *  module file system.
+ * 
+ *  Prerequisites:
+ *  In order for this to work, files with the names specified by the following definitions:
+ *  - MQTTSN_FLEX_CERTIFICATE_FILENAME 
+ *  - MQTTSN_FLEX_KEY_FILENAME
+ *  should be saved in the module. These are files downloaded from Thingstream
+ *  (or some other broker) and then saved in the Cellular module via m-center.
+ *  See instructions on how to Configure MQTT Flex in Readme.
+ *
+ * @return     zero on success, negative error code otherwise
 */
-static int32_t mqttSnRegisterTopic(const char *pTopicNameStr);
-
-/** Callback which handles incoming events from MQTT-SN client,
- *  where events = Unsolicited Response Codes ( URC ) from SARA-R5 module
- * see:SARA-R5_ATCommands_UBX-19047455
-*/
-void mqttSnClientCb(uAtClientHandle_t  client, void *pUnused);
-
+static err_code mqttSnImportCertKeyFiles(void);
 
 
 /* ----------------------------------------------------------------
@@ -110,11 +118,11 @@ K_THREAD_DEFINE(xCellMqttSnClientConnectThreadId, MQTTSN_STACK_SIZE, xCellMqttSn
  * GLOBALS
  * -------------------------------------------------------------- */
 
-/** Network Handle returned and used by ubxlib functions */
-static int32_t gNetHandle;
+/**MQTT context data for use with ubxlib functions*/
+uMqttClientContext_t *gMqttSnClientCtx;  
 
-/** Handle to be used by ubxlib AT Client mocule */
-static uAtClientHandle_t gAtHandle;
+// Security Settings for MQTT Flex plan
+uSecurityTlsSettings_t tlsSettings = U_SECURITY_TLS_SETTINGS_DEFAULT;
 
 /** Holds the result of the last operation performed by this module
  *  (refers to operations that need to report their result
@@ -125,67 +133,28 @@ static err_code gLastOperationResult = X_ERR_SUCCESS;
 /**Holds MQTT client status in terms of Sensor Aggregation application*/
 static xClientStatusStruct_t gMqttSnStatus = {.type = MqttSNClient, .status = ClientClosed };
 
-
-/** String representation of uMqttSNTopicType_t enums*/
+/** String representation of uMqttSnTopicNameType_t enums*/
 const char *uMqttSNTopicType_strings[]={
-    [MQTTSN_TOPIC_NORMAL] = "normal",
-    [MQTTSN_TOPIC_SHORT] = "short",
-    [MQTTSN_TOPIC_PREDEFINED] = "pre",
+    [ U_MQTT_SN_TOPIC_NAME_TYPE_ID_NORMAL ] = "normal",
+    [ U_MQTT_SN_TOPIC_NAME_TYPE_NAME_SHORT ] = "short",
+    [ U_MQTT_SN_TOPIC_NAME_TYPE_ID_PREDEFINED ] = "pre",
 };
-
-
-/** Callback (Unsolicited Response Code) calls counter */
-static int gCbCallsCnt =0;
-/** Param X read from an Unsolicited Response Code (callback) */
-static int gCbParamX=0;
-/** Param Y read from an Unsolicited Response Code (callback) */
-static int gCbParamY=0;
-/** Param Z read from an Unsolicited Response Code (callback) */
-static int gCbParamZ=0;
-
 
 /** A copy of the active (open) MQTT-SN client configuration */
 static xCellMqttSnConfig_t gMqttSnActiveConfigCopy;
-
 
 
 /* ----------------------------------------------------------------
  * CALLBACKS
  * -------------------------------------------------------------- */
 
-void mqttSnClientCb(uAtClientHandle_t  client, void *pUnused){
-        
-    // This callback is set to be triggered when an unsolicited 
-    // response from MQTT-SN client is received from Sara-R5 (+UUMQTTSNC)
-    // In this function we read the parameters of this response code
-    // (see UMQTTSNC command in AT commands manual for SARA-R5: 
-    // SARA-R5_ATCommands_UBX-19047455)
 
-
-    gCbParamX = uAtClientReadInt(client);    
-    gCbParamY = uAtClientReadInt(client); 
-
-    if( gCbParamX==0 ){
-        //+UUMQTTSNC: 0
-        // response to mqtt disconnect
-        // do nothing more
-    } 
-
-    if( gCbParamX==1 ){
-        //+UUMQTTSNC: 1
-        // response to mqtt connect
-        // do nothing more
-    }
-
-    if( gCbParamX==2 ){
-        //+UUMQTTSNC: 2,<MQTTSN_result>,<topic_id>
-        //response to topic register -- read one more parameter
-        gCbParamZ = uAtClientReadInt(client);  
-    }
-
-    // count the callbacks
-    gCbCallsCnt++;
+static void disconnectCallback(int32_t errorCode, void *pParam)
+{
+    LOG_WRN("Connection Dropped! \r\n");
+    //gMqttSnStatus.status = ClientOpen;  //??
 }
+
 
 /* ----------------------------------------------------------------
  * STATIC FUNCTION IMPLEMENTATION
@@ -198,57 +167,52 @@ static void mqttSnErrorHandle(err_code err_code){
 }
 
 
-static int32_t mqttSnConfigAnywherePlan(void){
+static err_code mqttSnImportCertKeyFiles(void){
 
-    // Read Saved Configuration for Anywhere Plan
-    int rc = xStorageReadMqttSnConfig( &gMqttSnActiveConfigCopy, ANYWHERE);
-    if( rc < 0 ){
-      if( rc == ERR_STORAGE_FILE_NOT_FOUND ){
-          LOG_ERR("No settings saved for MQTT Anywhere. Please use \"modules MQTTSN save\" command \r\n");    
-      }
-      else{
-          LOG_ERR("Error reading files for MQTT Flex \r\n");
-      }
-      mqttSnErrorHandle( rc );
-      return rc;
+    // The operations performed in this function are done with AT commands.
+    // They are not directly supported by ubxlib functions.
+
+    err_code ret;
+    uAtClientHandle_t pAtHandle;
+
+    // get AT client handler, to be able to send AT commands direclty to the module
+    ret = uCellAtClientHandleGet( xCellSaraGetHandle(), &pAtHandle );
+    if( ret < U_ERROR_COMMON_SUCCESS){
+        return ret;
     }
 
-    //Set the  client ID (copy from Thingstream portal):
-    //AT+UMQTTSN=0,"identity:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-    uAtClientLock(gAtHandle);
-    uAtClientCommandStart(gAtHandle, "AT+UMQTTSN=");
-    uAtClientWriteInt(gAtHandle, 0);
-    uAtClientWriteString(gAtHandle, gMqttSnActiveConfigCopy.clientID,true);
-    uAtClientCommandStopReadResponse(gAtHandle);
-    if (uAtClientUnlock(gAtHandle) != 0) {
-       LOG_ERR("Set Client ID error \r\n");
+    // Specify the certificate to be used with MQTT Flex
+    // This block sends this command to the module:
+    // AT+USECMNG=1,1,"MQTTFlex_cert","cert.pem"            
+    uAtClientLock(pAtHandle);
+    uAtClientCommandStart(pAtHandle, "AT+USECMNG=");
+    uAtClientWriteInt(pAtHandle, 1);
+    uAtClientWriteInt(pAtHandle, 1);
+    // The actual name given is not important, since all certificates are scanned 
+    // in mqttSnConfigFlexTLSSecurity() function and the first one found is used.
+    uAtClientWriteString(pAtHandle, "MQTTFlex_cert",true);
+    uAtClientWriteString(pAtHandle, MQTTSN_FLEX_CERTIFICATE_FILENAME,true);
+    uAtClientCommandStopReadResponse(pAtHandle);
+    if (uAtClientUnlock(pAtHandle) != 0) {
+       LOG_ERR("Certificate import error \r\n");
        mqttSnErrorHandle( X_ERR_AT_CMD );
        return X_ERR_AT_CMD;
     }
 
-    //Set server IP address and port:
-    //AT+UMQTTSN=2,"10.7.0.55",2442 
-    uAtClientLock(gAtHandle);
-    uAtClientCommandStart(gAtHandle, "AT+UMQTTSN=");
-    uAtClientWriteInt(gAtHandle, 1);
-    uAtClientWriteString(gAtHandle, MQTTSN_ANYWHERE_BROKER_IP,true);
-    uAtClientWriteInt(gAtHandle, MQTTSN_ANYWHERE_BROKER_PORT);
-    uAtClientCommandStopReadResponse(gAtHandle);
-    if (uAtClientUnlock(gAtHandle) != 0) {
-       LOG_ERR("Configure MQTT-SN gateway error \r\n");
-       mqttSnErrorHandle( X_ERR_AT_CMD );
-       return X_ERR_AT_CMD;
-    }
-
-    //Set connection duration (seconds):
-    //AT+UMQTTSN=8,600
-    uAtClientLock(gAtHandle);
-    uAtClientCommandStart(gAtHandle, "AT+UMQTTSN=");
-    uAtClientWriteInt(gAtHandle, 8);
-    uAtClientWriteInt(gAtHandle, gMqttSnActiveConfigCopy.con_duration);
-    uAtClientCommandStopReadResponse(gAtHandle);
-    if (uAtClientUnlock(gAtHandle) != 0) {
-       LOG_ERR("Configure connection duration error \r\n");
+    // Specify the key to be used with MQTT Flex
+    // This block sends this command to the module:
+    // AT+USECMNG=1,2,"MQTTFlex_key", "cert.key"
+    uAtClientLock(pAtHandle);
+    uAtClientCommandStart(pAtHandle, "AT+USECMNG=");
+    uAtClientWriteInt(pAtHandle, 1);
+    uAtClientWriteInt(pAtHandle, 2);
+    // The actual name given is not important, since all keys are scanned 
+    // in mqttSnConfigFlexTLSSecurity() function and the first one found is used.
+    uAtClientWriteString(pAtHandle, "MQTTFlex_key",true);
+    uAtClientWriteString(pAtHandle, MQTTSN_FLEX_KEY_FILENAME,true);
+    uAtClientCommandStopReadResponse(pAtHandle);
+    if (uAtClientUnlock(pAtHandle) != 0) {
+       LOG_ERR("Certificate key import error \r\n");
        mqttSnErrorHandle( X_ERR_AT_CMD );
        return X_ERR_AT_CMD;
     }
@@ -256,147 +220,75 @@ static int32_t mqttSnConfigAnywherePlan(void){
     return X_ERR_SUCCESS;
 }
 
+static err_code mqttSnConfigFlexTLSSecurity( void ){
 
-static int32_t mqttSnConfigFlexPlan(void){
+    err_code ret;
+    
+    uSecurityCredential_t buffer;
+    static char ClientCertificateName[ sizeof buffer.name ];
+    static char ClientPrivateKeyName[ sizeof buffer.name ];
 
-    // Read saved Configuration
-    int rc = xStorageReadMqttSnConfig( &gMqttSnActiveConfigCopy, FLEX);
-    if( rc < 0 ){
-      if( rc == ERR_STORAGE_FILE_NOT_FOUND ){
-          LOG_ERR("No settings saved for MQTT Flex. Please use \"modules MQTTSN save\" command \r\n");    
-      }
-      else{
-          LOG_ERR("Error reading files for MQTT Flex \r\n");
-      }
-      mqttSnErrorHandle( rc );
-      return rc;
+    memset( ClientCertificateName, 0, sizeof(ClientCertificateName) );
+    memset( ClientPrivateKeyName, 0, sizeof(ClientPrivateKeyName) );
+
+    // Import certificate and Key from files saved in Cellular File system
+    ret = mqttSnImportCertKeyFiles();
+    if( ret < X_ERR_SUCCESS ){
+        return ret;
     }
 
-     //Specify the certificate to be used with MQTT Flex
-     
-        //AT+USECMNG=1,1,"MQTTFlex_cert","cert.pem"            
-        uAtClientLock(gAtHandle);
-        uAtClientCommandStart(gAtHandle, "AT+USECMNG=");
-        uAtClientWriteInt(gAtHandle, 1);
-        uAtClientWriteInt(gAtHandle, 1);
-        uAtClientWriteString(gAtHandle, "MQTTFlex_cert",true);
-        uAtClientWriteString(gAtHandle, MQTTSN_FLEX_CERTIFICATE_FILENAME,true);
-        uAtClientCommandStopReadResponse(gAtHandle);
-        if (uAtClientUnlock(gAtHandle) != 0) {
-           LOG_ERR("Certificate import error \r\n");
-           mqttSnErrorHandle( X_ERR_AT_CMD );
-           return X_ERR_AT_CMD;
+    // Cycle through all credentials saved in SARA module memory.
+    // Find appropriate certificate and key saved in SARA module memory to use with Flex plan.
+    // (you have to save this certificates and key in SARA module memory using m-center,
+    // and then use function mqttSnImportCertKeyFiles, or send the commands before this works properly:
+    // - AT+USECMNG=1,1,"Some_name","cert.pem" 
+    // - AT+USECMNG=1,2,"Some_other_name", "cert.key"
+    // In case more than one appropriate certificate/Key are found the first ones are used
+    for (int32_t x = uSecurityCredentialListFirst( xCellSaraGetHandle(), &buffer);
+         x >= 0;
+         x = uSecurityCredentialListNext(xCellSaraGetHandle(), &buffer)) {
+        
+        // found Client Certificate -> use it
+        if( buffer.type == U_SECURITY_CREDENTIAL_CLIENT_X509 ){
+            memcpy( ClientCertificateName, buffer.name, sizeof(ClientCertificateName) );
+            LOG_INF("Client Certificate Found: %s\r\n", ClientCertificateName);    
         }
 
-        //Specify the key to be used with MQTT Flex
-        //AT+USECMNG=1,2,"MQTTFlex_key", "cert.key"
-        uAtClientLock(gAtHandle);
-        uAtClientCommandStart(gAtHandle, "AT+USECMNG=");
-        uAtClientWriteInt(gAtHandle, 1);
-        uAtClientWriteInt(gAtHandle, 2);
-        uAtClientWriteString(gAtHandle, "MQTTFlex_key",true);
-        uAtClientWriteString(gAtHandle, MQTTSN_FLEX_KEY_FILENAME,true);
-        uAtClientCommandStopReadResponse(gAtHandle);
-        if (uAtClientUnlock(gAtHandle) != 0) {
-           LOG_ERR("Certificate key import error \r\n");
-           mqttSnErrorHandle( X_ERR_AT_CMD );
-           return X_ERR_AT_CMD;
+        // found Private Key -> use it
+        else if( buffer.type == U_SECURITY_CREDENTIAL_CLIENT_KEY_PRIVATE ){
+            memcpy( ClientPrivateKeyName, buffer.name, sizeof(ClientPrivateKeyName) );
+            LOG_INF("Client Private Key Found: %s\r\n", ClientPrivateKeyName);    
         }
 
-        //Set the profile ID to use.  This examples uses profile 0 (ubxlib adds a profile starting from 0)
-        //AT+USECPRF=0
-        uCellSecTlsContext_t *pContext;
-        pContext = pUCellSecSecTlsAdd(gNetHandle);
+        // clear buffer before next search
+        memset( &buffer , 0, sizeof(buffer) );
+    }
 
-        //Set the certificate validation level:
-        //AT+USECPRF=0,0,0
-        uAtClientLock(gAtHandle);
-        uAtClientCommandStart(gAtHandle, "AT+USECPRF=");
-        uAtClientWriteInt(gAtHandle, 0);
-        uAtClientWriteInt(gAtHandle, 0);
-        uAtClientWriteInt(gAtHandle, 0);
-        uAtClientCommandStopReadResponse(gAtHandle);
-        if (uAtClientUnlock(gAtHandle) != 0) {
-           LOG_ERR("Set the certificate validation level error\r\n");
-           mqttSnErrorHandle( X_ERR_AT_CMD );
-           return X_ERR_AT_CMD;
-        }
+    // Both Client Certificate and Private key need to be found before proceeding 
+    if( ( strlen( ClientCertificateName ) == 0 ) || ( strlen(ClientPrivateKeyName) == 0 ) ){
+        LOG_INF("Did not find both Client Certificate and Private Key \r\n");
+        return X_ERR_NOT_FOUND;
+    }
 
-        // Set profile 0 to accept TLS v1.2: 
-        // AT+USECPRF=0,1,3
-        gLastOperationResult = uCellSecTlsVersionSet( pContext, U_SECURITY_TLS_VERSION_1_2);
-        if(gLastOperationResult != X_ERR_SUCCESS){
-            mqttSnErrorHandle( gLastOperationResult );
-            return gLastOperationResult;
-        }
-
-        //Set the cipher suite:
-        //AT+USECPRF=0,2,100,"c0","30",0
-        gLastOperationResult = uCellSecTlsCipherSuiteAdd( pContext, U_SECURITY_TLS_CIPHER_SUITE_ECDHE_RSA_WITH_AES_256_GCM_SHA384 );
-        if(gLastOperationResult != X_ERR_SUCCESS){
-            mqttSnErrorHandle( gLastOperationResult );
-            return gLastOperationResult;
-        }
-
-        //Set the  client key and certificate to be used (as saved in the module):
-        //AT+USECPRF=0,5,"cert"
-        gLastOperationResult = uCellSecTlsClientCertificateNameSet(pContext,"MQTTFlex_cert");
-        if(gLastOperationResult != X_ERR_SUCCESS){
-            mqttSnErrorHandle( gLastOperationResult );
-            return gLastOperationResult;
-        }
-
-        //AT+USECPRF=0,6,"key"
-        gLastOperationResult = uCellSecTlsClientPrivateKeyNameSet(pContext, "MQTTFlex_key", NULL);
-        if(gLastOperationResult != X_ERR_SUCCESS){
-            mqttSnErrorHandle( gLastOperationResult );
-            return gLastOperationResult;
-        }
-
-        //Configure the MQTT-SN  client to use your MQTT Flex thing with the security profile 
-
-        //Set the  client ID (copy from Thingstream portal):
-        //AT+UMQTTSN=0,"device:262a43d2-8364-4b02-9ed6-49701bbf4872"
-        uAtClientLock(gAtHandle);
-        uAtClientCommandStart(gAtHandle, "AT+UMQTTSN=");
-        uAtClientWriteInt(gAtHandle, 0);
-        uAtClientWriteString(gAtHandle, gMqttSnActiveConfigCopy.clientID,true);
-        uAtClientCommandStopReadResponse(gAtHandle);
-        if (uAtClientUnlock(gAtHandle) != 0) {
-           LOG_ERR("Set Client ID error \r\n");
-           mqttSnErrorHandle(X_ERR_AT_CMD );
-           return X_ERR_AT_CMD;
-        }
-
-        //Configure the MQTT-SN gateway endpoint:
-        //AT+UMQTTSN=1,"mqtt-flex.thingstream.io",2443
-        uAtClientLock(gAtHandle);
-        uAtClientCommandStart(gAtHandle, "AT+UMQTTSN=");
-        uAtClientWriteInt(gAtHandle, 1);
-        uAtClientWriteString(gAtHandle, MQTTSN_FLEX_BROKER_HOSTNAME,true);
-        uAtClientWriteInt(gAtHandle, MQTTSN_FLEX_BROKER_PORT);
-        uAtClientCommandStopReadResponse(gAtHandle);
-        if (uAtClientUnlock(gAtHandle) != 0) {
-           LOG_ERR("Configure MQTT-SN gateway error \r\n");
-           mqttSnErrorHandle( X_ERR_AT_CMD );
-           return X_ERR_AT_CMD;
-        }
-
-        //Set the client to use the required DTLS profile: 
-        //AT+UMQTTSN=9,1,0
-        uAtClientLock(gAtHandle);
-        uAtClientCommandStart(gAtHandle, "AT+UMQTTSN=");
-        uAtClientWriteInt(gAtHandle, 9);
-        uAtClientWriteInt(gAtHandle, 1);
-        uAtClientWriteInt(gAtHandle, 0);
-        uAtClientCommandStopReadResponse(gAtHandle);
-        if (uAtClientUnlock(gAtHandle) != 0) {
-           LOG_ERR("Set client DTLS profile error \r\n");
-           mqttSnErrorHandle( X_ERR_AT_CMD );
-           return X_ERR_AT_CMD;
-        }
-
-        return X_ERR_SUCCESS;
+    // Set up the tls Settings structure
+    tlsSettings.tlsVersionMin = U_SECURITY_TLS_VERSION_1_2;
+    tlsSettings.pRootCaCertificateName = NULL;
+    tlsSettings.pClientCertificateName = ClientCertificateName;
+    tlsSettings.pClientPrivateKeyName = ClientPrivateKeyName;
+    tlsSettings.certificateCheck = U_SECURITY_TLS_CERTIFICATE_CHECK_NONE;
+    tlsSettings.pClientPrivateKeyPassword = NULL;
+    tlsSettings.cipherSuites.num = 1;
+    tlsSettings.cipherSuites.suite[0] = U_SECURITY_TLS_CIPHER_SUITE_ECDHE_RSA_WITH_AES_256_GCM_SHA384;
+    //tlsSettings.psk;
+    //tlsSettings.pskId;
+    //tlsSettings.pskGeneratedByRoT;
+    //tlsSettings.pExpectedServerUrl;
+    //tlsSettings.pSni;
+    //tlsSettings.enableSessionResumption;
+    tlsSettings.useDeviceCertificate = false;
+    //tlsSettings.includeCaCertificates;
+    
+    return X_ERR_SUCCESS;
 }
 
 
@@ -437,35 +329,37 @@ void xCellMqttSnClientOpenThread(void){
             }
         }
 
-        // obtain network handle for SARA-R5
-        gNetHandle =  xCellSaraGetHandle();
-
-        // this check should not be necessary as if the network handle is not valid
-        // this would create an error in the SARA config function
-        if( gNetHandle < 0 ){
-            LOG_ERR("Cannot obtain network handle from cell module, Error Code: %d\r\n", gNetHandle);
-            mqttSnErrorHandle( gNetHandle ); //error code
-            continue;
-        }
-
         //optical indication
         xLedFade( MQTTSN_ACTIVATING_LEDCOL, MQTTSN_ACTIVATING_LED_DELAY_ON, MQTTSN_ACTIVATING_LED_DELAY_OFF, 0 );
 
-        // obtain a handle for use with AT client
-        uCellAtClientHandleGet( gNetHandle, &gAtHandle );
+        // Open an MQTTSN client for MQTT Anywhere plan
+        if( xCellSaraGetActiveMqttPlan() == ANYWHERE ){ 
 
-        // Setup MQTT-SN client for MQTT Flex
-        if( xCellSaraGetActiveMqttPlan() == FLEX ){
-            if( mqttSnConfigFlexPlan() != X_ERR_SUCCESS ){
-                continue;
-            }
+            gMqttSnClientCtx = pUMqttClientOpen( xCellSaraGetHandle(), NULL);
         }
 
-        // Setup MQTT-SN client for MQTT Anywhere
-        else if( xCellSaraGetActiveMqttPlan() == ANYWHERE ){
-            if( mqttSnConfigAnywherePlan() != X_ERR_SUCCESS ){
+        // Open an MQTTSN client for MQTT Flex plan
+        else if( xCellSaraGetActiveMqttPlan() == FLEX ){
+
+            gLastOperationResult = mqttSnConfigFlexTLSSecurity();
+            if( gLastOperationResult < X_ERR_SUCCESS ){
                 continue;
             }
+            
+            gMqttSnClientCtx = pUMqttClientOpen( xCellSaraGetHandle(), &tlsSettings);
+        }
+
+        if( gMqttSnClientCtx == NULL ){
+            err_code err = uMqttClientOpenResetLastError();
+            LOG_ERR("pUMqttClientOpen err: %d", err );
+            mqttSnErrorHandle( err ); 
+            continue;
+        }
+
+        if( !uMqttClientSnIsSupported(gMqttSnClientCtx) ){
+            LOG_ERR("MQTTSN Not Supported \r\n");
+            mqttSnErrorHandle( X_ERR_UNKNOWN ); 
+            continue;
         }
 
         LOG_INF("Client opened \r\n");
@@ -476,6 +370,11 @@ void xCellMqttSnClientOpenThread(void){
 
 
 void xCellMqttSnClientConnectThread(void){
+
+    char brokerNameStr[ MQTTSN_BROKER_NAME_MAXLEN ];
+    char portStr[10];
+
+    k_thread_system_pool_assign(k_current_get());
 
     while(1){
 
@@ -509,137 +408,67 @@ void xCellMqttSnClientConnectThread(void){
         // optical indication
         xLedFade(MQTTSN_ACTIVATING_LEDCOL,MQTTSN_ACTIVATING_LED_DELAY_ON,MQTTSN_ACTIVATING_LED_DELAY_OFF,0);
 
-        // reset cb counter 
-        gCbCallsCnt = 0;
-
-        LOG_INF("Connecting to MQTTSN broker \r\n");
-
-        //# Connect to broker
-        // AT+UMQTTSNC=1
-        uAtClientLock(gAtHandle);
-        uAtClientCommandStart(gAtHandle, "AT+UMQTTSNC=");
-        uAtClientWriteInt(gAtHandle, 1);
-        uAtClientCommandStopReadResponse(gAtHandle);
-        if (uAtClientUnlock(gAtHandle) != 0) {
-           LOG_ERR("Error Sending Connect to broker Command \r\n");
-           mqttSnErrorHandle( X_ERR_AT_CMD );
-           continue;
+        // Read saved Configuration for Connection
+        xCellMqttSnPlan_t activePlan = xCellSaraGetActiveMqttPlan();
+        int rc = xStorageReadMqttSnConfig( &gMqttSnActiveConfigCopy, activePlan );
+        if( rc < 0 ){
+            if( rc == ERR_STORAGE_FILE_NOT_FOUND ){
+                LOG_ERR("No settings saved for MQTTSN plan. Please use \"modules MQTTSN save\" command \r\n");    
+            }
+        else{
+            LOG_ERR("Error reading files for MQTTSN plan\r\n");
+        }
+            mqttSnErrorHandle( rc );
+            continue;
         }
 
-        uAtClientSetUrcHandler(gAtHandle, "+UUMQTTSNC:", mqttSnClientCb, NULL);
-
-        while( gCbCallsCnt == 0 ){
-            //printk(".");
-            k_sleep(K_MSEC(500));   //no need for timeout? URC response is sent at timeout from SARA module
+        // Prepare Broker Name string
+        // add port at the end of the broker string with a semicolon
+        // e.g. "mqtt-flex.thingstream.io:2443", where 2443 is the port
+        if( activePlan == FLEX ){
+            memset( brokerNameStr, 0, sizeof(brokerNameStr) );
+            memset( portStr,0 , sizeof(portStr) );
+            strcpy( brokerNameStr, MQTTSN_FLEX_BROKER_HOSTNAME );
+            sprintf( portStr, ":%d", MQTTSN_FLEX_BROKER_PORT );
+            strcat( brokerNameStr, portStr);
+        }
+        else if( activePlan == ANYWHERE ){
+            memset( brokerNameStr, 0, sizeof(brokerNameStr) );\
+            memset( portStr,0 , sizeof(portStr) );
+            strcpy( brokerNameStr, MQTTSN_ANYWHERE_BROKER_IP );
+            sprintf( portStr, ":%d", MQTTSN_ANYWHERE_BROKER_PORT );
+            strcat( brokerNameStr, portStr);
         }
 
+        const uMqttClientConnection_t mqttSnConnection = {
+            .pBrokerNameStr = brokerNameStr,
+            .localPort = -1, 
+            .pClientIdStr = gMqttSnActiveConfigCopy.clientID,
+            .inactivityTimeoutSeconds = 600,
+            .mqttSn = true
+        };
 
-        if( gCbParamY == 0 ){      // failed to connect
-            //read mqtt-sn connection error
-           int x,y;
-           uAtClientLock(gAtHandle);
-           uAtClientCommandStart(gAtHandle, "AT+UMQTTSNER");
-           uAtClientCommandStop(gAtHandle);
-           uAtClientResponseStart(gAtHandle, "+UMQTTSNER:");
-           x = uAtClientReadInt(gAtHandle);              
-           y = uAtClientReadInt(gAtHandle); 
-           //uAtClientCommandStopReadResponse(gAtHandle);
-           uAtClientResponseStop(gAtHandle);
-           if (uAtClientUnlock(gAtHandle) != 0) {
-                LOG_ERR("Error while sending get error AT command \r\n");
-                mqttSnErrorHandle( X_ERR_AT_CMD );
-                continue;
-           }
+        uMqttClientSetDisconnectCallback(gMqttSnClientCtx, disconnectCallback, NULL);
+        gLastOperationResult = uMqttClientConnect(gMqttSnClientCtx, &mqttSnConnection);
 
-           LOG_WRN("MQTT connection error code(see SARA-R5 series AT commands manual): %d, %d\r\n", x,y); 
-           mqttSnErrorHandle( X_ERR_MQTTSN_CON ); //special error code
-           continue;
+        if( gLastOperationResult != X_ERR_SUCCESS ){
+            LOG_ERR("uMqttSnClientConnect failed: %d\r\n", gLastOperationResult );
+            mqttSnErrorHandle( gLastOperationResult );
+            continue;
+        } 
 
-        }
-
-        else if( gCbParamY == 1 ){   //successful connection to mqtt-sn
-
-           LOG_INF("MQTT Connected \r\n"); 
-           gMqttSnStatus.status = ClientConnected;
-        }
-
+        LOG_INF("MQTTSN Connected \r\n"); 
+        gMqttSnStatus.status = ClientConnected;
+        
         xLedOff();
     }
 }
 
 
-static int32_t mqttSnRegisterTopic(const char *pTopicNameStr){
-
-    int32_t  op_code, MQTTSN_result, topic_id;
-    gCbCallsCnt=0;
-    
-    // Register a topic
-    // Before you can publish to a  normal topic, you need to register with with the broker and get back a topic ID. 
-    //AT+UMQTTSNC=2,"my/publish/topic"
-    uAtClientLock(gAtHandle);
-    uAtClientCommandStart(gAtHandle, "AT+UMQTTSNC=");
-    uAtClientWriteInt(gAtHandle, 2);
-    uAtClientWriteString(gAtHandle, pTopicNameStr,true);
-    uAtClientCommandStop(gAtHandle);
-    uAtClientCommandStopReadResponse(gAtHandle);
-    if ( uAtClientUnlock(gAtHandle) != 0 ) {
-        LOG_ERR("Register topic command error\r\n");
-        mqttSnErrorHandle( X_ERR_AT_CMD ); //?
-        return X_ERR_AT_CMD;
-    }
-   
-
-      // Expect +UUMQTTSNC: 2,1,1 as a response to confirm the registration.  
-   // The final argument in the response is the topic ID to use when you publish.
-   // the response is handled by the uAtClientSetUrcHandler which handles "+UUMQTTSNC:" responses
-   // and was set during the connect to mqtt function call
-
-    while( gCbCallsCnt == 0 ){
-        //printk(".");
-        k_sleep(K_MSEC(500));
-    }
-
-    op_code = gCbParamX;   
-    MQTTSN_result = gCbParamY;
-    topic_id = gCbParamZ;
-
-    // if the URC received has operation code (op_code) 2, then it refers
-    // to topic registration (and not another URC code)
-    if( ( op_code == 2 ) && ( MQTTSN_result == 1 ) ){
-        //success
-        return topic_id;
-    }
-
-    else{
-        
-        LOG_ERR("Register Topic failure\r\n");
-        
-        int x,y;
-        uAtClientLock(gAtHandle);
-        uAtClientCommandStart(gAtHandle, "AT+UMQTTSNER");
-        uAtClientCommandStop(gAtHandle);
-        uAtClientResponseStart(gAtHandle, "+UMQTTSNER:");
-        x = uAtClientReadInt(gAtHandle);              
-        y = uAtClientReadInt(gAtHandle); 
-        //uAtClientCommandStopReadResponse(gAtHandle);
-        uAtClientResponseStop(gAtHandle);
-        if (uAtClientUnlock(gAtHandle) != 0) {
-             LOG_ERR("Error while sending get error AT command \r\n");
-             mqttSnErrorHandle( X_ERR_AT_CMD );
-             return X_ERR_AT_CMD;
-        }
-
-        LOG_WRN("MQTT Register topic error: %d, %d\r\n", x,y);
-        mqttSnErrorHandle( X_ERR_UNKNOWN );
-        return X_ERR_UNKNOWN;
-    }
-}
-
-
-
 /* ----------------------------------------------------------------
  * PUBLIC FUNCTION IMPLEMENTATION
  * -------------------------------------------------------------- */
+
 
 err_code xCellMqttSnGetLastOperationResult(void){
     return gLastOperationResult;
@@ -667,17 +496,26 @@ xClientStatus_t xCellMqttSnClientGetStatus(void){
 
 err_code xCellMqttSnClientClose(void){
 
-    err_code ret = X_ERR_SUCCESS;
+    LOG_INF("MQTT-SN Client Close Request \r\n");
+
+    // if connected to MQTT Broker disconnect before closing the client
     if( gMqttSnStatus.status == ClientConnected ){
         LOG_WRN("Client Connected. Trying to disconnect now \r\n");
-        ret = xCellMqttSnClientDisconnect();
+        // return code from xCellMqttSnClientDisconnect is not used in this
+        // function, we continue closing the client anyway
+        xCellMqttSnClientDisconnect();
     }
 
-    LOG_INF("MQTTSN client closed \r\n");
-    gMqttSnStatus.status = ClientClosed; //no need to deconfigure something
-    return ret;
-}
+    if(gMqttSnStatus.status == ClientOpen){
+        LOG_INF("Closing MQTT client \r\n");
+        uMqttClientClose(gMqttSnClientCtx);
+        gMqttSnStatus.status = ClientClosed;    
+    }
 
+    LOG_INF("MQTT-SN Client Closed\r\n");
+    
+    return X_ERR_SUCCESS;
+}
 
 
 err_code xCellMqttSnClientDisconnect(void){
@@ -685,188 +523,59 @@ err_code xCellMqttSnClientDisconnect(void){
     // Set optical indication
     xLedFade(MQTTSN_DEACTIVATING_LEDCOL,MQTTSN_ACTIVATING_LED_DELAY_ON,MQTTSN_ACTIVATING_LED_DELAY_OFF,0);
 
-   // reset cb counter 
-    gCbCallsCnt = 0;
+    LOG_INF("MQTT-SN Client Disconnection Request \r\n");
 
-   // Send disconnect command
-   uAtClientLock(gAtHandle);
-   uAtClientCommandStart(gAtHandle, "AT+UMQTTSNC=");
-   uAtClientWriteInt(gAtHandle, 0);
-   uAtClientCommandStopReadResponse(gAtHandle);
-   if ( uAtClientUnlock(gAtHandle) != 0 ) {
-       LOG_ERR("MQTT SN Disconnection command error \r\n");
-       mqttSnErrorHandle( X_ERR_AT_CMD );
-       return X_ERR_AT_CMD;
-   }
-   
-   //uAtClientCommandStop(gAtHandle);
-    while( gCbCallsCnt == 0 ){
-        //printk(".");
-        //k_sleep(K_MSEC(500)); //no need for timeout?URC response is sent at timeout from SARA module
+    gLastOperationResult = uMqttClientDisconnect(gMqttSnClientCtx);
+    
+    if( gLastOperationResult != X_ERR_SUCCESS ){
+        LOG_ERR("Mqtt Sn Client Disconnect error code: %d \r\n", gLastOperationResult);    
+        // continue even if error occurs, normally this is used in
+        // the context of deinitialization anyway 
+    }
+    
+    if( gMqttSnStatus.status == ClientConnected ){
+        gMqttSnStatus.status = ClientOpen;
     }
 
-    if( gCbParamY == 0 ){      // failed to disconnect
-        //read mqtt-sn connection error
-       int x,y;
-       uAtClientLock(gAtHandle);
-       uAtClientCommandStart(gAtHandle, "AT+UMQTTSNER");
-       uAtClientCommandStop(gAtHandle);
-       uAtClientResponseStart(gAtHandle, "+UMQTTSNER:");
-       x = uAtClientReadInt(gAtHandle);              
-       y = uAtClientReadInt(gAtHandle); 
-       //uAtClientCommandStopReadResponse(gAtHandle);
-       uAtClientResponseStop(gAtHandle);
-       if (uAtClientUnlock(gAtHandle) != 0) {
-             LOG_ERR("Error while sending get error AT command \r\n");
-             mqttSnErrorHandle( X_ERR_AT_CMD );
-             return X_ERR_AT_CMD;
-       }
-
-       LOG_WRN("MQTT-SN disconnection error code(see SARA-R5 series AT commands manual): %d, %d\r\n", x,y); 
-       return y;
-    }
-
-   LOG_INF("MQTT-SN Disconnected\r\n"); 
-
-   gMqttSnStatus.status = ClientOpen;
+   LOG_INF("MQTT-SN client disconnection action completed\r\n");
    xLedOff();
    return X_ERR_SUCCESS;
    
 }
 
 
+err_code xCellMqttSnClientPublish( const uMqttSnTopicName_t *pTopicName,
+                                    const char *pMessage,
+                                    size_t messageSizeBytes,
+                                    uMqttQos_t qos, bool retain){
 
-err_code xCellMqttSnClientPublish( uMqttSNTopicType_t topic_type,
-    const char *pTopicNameStr,
-    const char *pMessage,
-    size_t messageSizeBytes,
-    uMqttSNQos_t qos,
-    bool retain){
-
-    int32_t topic_id;
-    int32_t  op_code, MQTTSN_result;
-    char topic_id_str[MMQTTNS_TOPIC_MAXLEN];
-
-    if( ( topic_type >= MQTTSN_TOPIC_MAX_NUM ) || ( topic_type < 0 ) ){
-        // invalid parameter error
-        mqttSnErrorHandle( X_ERR_INVALID_PARAMETER );
-        return X_ERR_INVALID_PARAMETER;
-    }
-
-    // cannot publish in normal topic type with QOS=3
-    if( topic_type == MQTTSN_TOPIC_NORMAL ){
-        if( qos == U_MQTTSN_QOS_SPECIAL ){
-            //invalid parameters error
-            mqttSnErrorHandle( X_ERR_INVALID_PARAMETER );
-            return X_ERR_INVALID_PARAMETER;
-        }
-    }
-
-    // short topic type supports a topic name up to 2 characters long
-    if( topic_type == MQTTSN_TOPIC_SHORT ){
-        if( strlen(pTopicNameStr) > 2 ){
-            mqttSnErrorHandle( X_ERR_INVALID_PARAMETER );
-            return X_ERR_INVALID_PARAMETER; 
-        }
-    }
-
-    // pTopicNameStr should be a number string when predefined topic type is used
-    if( topic_type == MQTTSN_TOPIC_PREDEFINED ){
-        int len = strlen(pTopicNameStr);
-        if(len==0){
-            mqttSnErrorHandle( X_ERR_INVALID_PARAMETER );
-            return X_ERR_INVALID_PARAMETER; 
-        }
-        for(int x=0; x<len; x++){
-            if( !isdigit( pTopicNameStr[x] ) ){
-                mqttSnErrorHandle( X_ERR_INVALID_PARAMETER );
-                return X_ERR_INVALID_PARAMETER; 
-            }
-        }
-    }
-
-   // When normal Topic Type is used the topic should be registered prior to publishing
-   if( topic_type == MQTTSN_TOPIC_NORMAL){
-        topic_id = mqttSnRegisterTopic(pTopicNameStr);
-        if(topic_id >= 0 ){
-            memset(topic_id_str,0,sizeof(topic_id_str));
-            sprintf(topic_id_str,"%d",topic_id);
-            //LOG_INF("Topic Id: %s\r\n",topic_id_str);
-        }
-        else{
-            mqttSnErrorHandle( X_ERR_UNKNOWN );
-            return X_ERR_UNKNOWN; //failure
-        } 
-    }
-    else{
-        memset(topic_id_str,0,sizeof(topic_id_str));
-        strcpy(topic_id_str,pTopicNameStr);
-        //LOG_INF("Topic Id: %s\r\n",topic_id_str);
-    }
-
-    // Publish the message
-    gCbCallsCnt =0;
-    uAtClientLock(gAtHandle);
-    uAtClientCommandStart(gAtHandle, "AT+UMQTTSNC=");
-    uAtClientWriteInt(gAtHandle, 4);
-    uAtClientWriteInt(gAtHandle, qos);
-    uAtClientWriteInt(gAtHandle, (int32_t)retain ); 
-    uAtClientWriteInt(gAtHandle, 0); //only string publish supported in this function
-    uAtClientWriteInt(gAtHandle, (int)topic_type); //1= predefined? 0 = normal, 2 = short
-    uAtClientWriteString(gAtHandle, topic_id_str,true);
-    uAtClientWriteString(gAtHandle, pMessage,true);
-
-    uAtClientCommandStopReadResponse(gAtHandle);
-    if (uAtClientUnlock(gAtHandle) != 0) {
-       LOG_ERR("Send Message error \r\n");
-       mqttSnErrorHandle( X_ERR_AT_CMD );
-       return X_ERR_AT_CMD; //failure
-    }
-
-    //wait for publish
-    while( gCbCallsCnt == 0 ){
-        //printk(".");
-        k_sleep(K_MSEC(100));
-    }
-
-    op_code = gCbParamX;   
-    MQTTSN_result = gCbParamY;
+    /* Should be connected to publish
+    *
+    * Although QOS=3 does not need a connection to the Broker:
+    * MQTT-SN publish of messages using QOS = 3 in a connectionless way is not currently directly
+    * supported by ubxlib v1.0, because the connection parameters (broker name, Port and Client ID)
+    * are passed to the library with the use of uMqttClientConnect() function, which connects the 
+    * device to the broker. Update to allow connectionless use of QOS=3 is expected soon.
+    */
+    if( gMqttSnStatus.status < ClientConnected ){
+            LOG_WRN("MQTT-SN not connected\r\n");  
+            return X_ERR_INVALID_STATE;  
+    }                                    
     
-    // URC for publish:   +UUMQTTSNC: 4,<MQTTSN_result> 
-    //(see AT command manual for SARA-R5: SARA-R5_ATCommands_UBX-19047455)
-    if( ( op_code == 4 ) && ( MQTTSN_result == 1 ) ){
-        //success
-        return X_ERR_SUCCESS;
+    err_code ret = uMqttClientSnPublish( gMqttSnClientCtx, pTopicName, pMessage, messageSizeBytes, qos, retain);
+    if( ret!= X_ERR_SUCCESS ){
+        LOG_ERR(" Publish error: %d \r\n", ret );
     }
 
-    else{
-        LOG_ERR("Publish failed\r\n");
+    return ret;
 
-        int x,y;
-        uAtClientLock(gAtHandle);
-        uAtClientCommandStart(gAtHandle, "AT+UMQTTSNER");
-        uAtClientCommandStop(gAtHandle);
-        uAtClientResponseStart(gAtHandle, "+UMQTTSNER:");
-        x = uAtClientReadInt(gAtHandle);              
-        y = uAtClientReadInt(gAtHandle); 
-        //uAtClientCommandStopReadResponse(gAtHandle);
-        uAtClientResponseStop(gAtHandle);
-        if (uAtClientUnlock(gAtHandle) != 0) {
-             LOG_ERR("Error while sending get error AT command \r\n");
-             mqttSnErrorHandle( X_ERR_AT_CMD );
-             return X_ERR_AT_CMD; 
-        }
-
-        LOG_WRN("MQTT publish error: %d, %d\r\n", x,y); 
-        mqttSnErrorHandle( X_ERR_UNKNOWN );
-        return X_ERR_UNKNOWN;  //error code
-    }
 }
 
 
 /* ----------------------------------------------------------------
  * SHELL COMMANDS IMPLEMENTATION
  * -------------------------------------------------------------- */
+
 
 void xCellMqttSnSaveConfigCmd(const struct shell *shell, size_t argc, char **argv){
 
@@ -921,7 +630,6 @@ void xCellMqttSnSaveConfigCmd(const struct shell *shell, size_t argc, char **arg
 
 		return;
 }
-
 
 
 void xCellMqttSnTypeConfigCmd(const struct shell *shell, size_t argc, char **argv){
@@ -999,7 +707,6 @@ void xCellMqttSnTypeConfigCmd(const struct shell *shell, size_t argc, char **arg
 }
 
 
-
 void xCellMqttSnClientStatusCmd(const struct shell *shell, size_t argc, char **argv){
 
     shell_print(shell, "\r\nMQTT-SN --------------------------------\r\n");
@@ -1032,8 +739,10 @@ void xCellMqttSnClientStatusCmd(const struct shell *shell, size_t argc, char **a
 }
 
 
-
 void xCellMqttSnSendCmd(const struct shell *shell, size_t argc, char **argv){
+
+        uMqttSnTopicName_t pTopicName;
+        int32_t ret;
 
         if(argc==1){
             shell_print(shell, "Please provide topic type, topic name, message and QOS\r\n");  
@@ -1054,24 +763,28 @@ void xCellMqttSnSendCmd(const struct shell *shell, size_t argc, char **argv){
         else if(argc==5){
             //check qos
             int qos = atoi(argv[4]);
-            if( (qos > U_MQTTSN_QOS_MAX_NUM) || (qos < 0) ){
+            if( (qos > U_MQTT_QOS_SEND_AND_FORGET  ) || (qos < 0) ){
                 shell_print(shell, "Invalid QOS\r\n");  
                 return;
             }
 
-            //check connection if needed
-            if( qos < U_MQTTSN_QOS_SPECIAL ){
-                // a connection is required
-                if( gMqttSnStatus.status < ClientConnected){
-                    shell_print(shell, "MQTT-SN not connected, abort action (only QOS=3 can be used without connection)\r\n");  
-                    return;
-                }
-            }
+            // -- Connection is needed always - check why in 
+            // xCellMqttSnClientPublish() comments.
+
+            // //check connection if needed --> this will be uncommented when qos==3 is supported
+            // //in a connectionless way by ubxlib.
+            // if( qos < U_MQTTSN_QOS_SPECIAL ){
+            //     // a connection is required
+            //     if( gMqttSnStatus.status < ClientConnected){
+            //         shell_print(shell, "MQTT-SN not connected, abort action (only QOS=3 can be used without connection)\r\n");  
+            //         return;
+            //     }
+            // }
 
             // check topic type string and get enum
-            uint8_t topic_type_enum_idx=0;
+            uMqttSnTopicNameType_t topic_type_enum_idx = 0;
             bool topic_type_found = false;
-            for( topic_type_enum_idx = 0; topic_type_enum_idx < MQTTSN_TOPIC_MAX_NUM; topic_type_enum_idx++ ){
+            for( topic_type_enum_idx = 0; topic_type_enum_idx < U_MQTT_SN_TOPIC_NAME_TYPE_MAX_NUM; topic_type_enum_idx++ ){
                 if( strcmp(argv[1],uMqttSNTopicType_strings[ topic_type_enum_idx ] ) == 0 ){
                     topic_type_found = true;
                     break;
@@ -1079,15 +792,56 @@ void xCellMqttSnSendCmd(const struct shell *shell, size_t argc, char **argv){
             }
             
             if( !topic_type_found ){
-                shell_print(shell, "Invalid topic type\r\n");  
+                shell_warn(shell, "Invalid topic type\r\n");  
                 return;
             }
 
             shell_print(shell, "Sending ""%s"" to topic ""%s"" with QoS: %d\r\n", argv[3], argv[2], (uint8_t)qos );
 
-            int32_t err = xCellMqttSnClientPublish(topic_type_enum_idx, argv[2], argv[3], strlen(argv[3]), qos, 0);  //0 is the retain
-            if(err != 0){
-                shell_print(shell, "nuMqttClientPublish failed: %d\r\n", err );
+
+            // prepare topic for use with xCellMqttSnClientPublish function
+            switch(topic_type_enum_idx){
+
+                case U_MQTT_SN_TOPIC_NAME_TYPE_ID_NORMAL: 
+
+                    shell_print(shell, "Registering Topic name: %s\r\n", argv[2] );      
+                    if( ( ret = uMqttClientSnRegisterNormalTopic( gMqttSnClientCtx, argv[2], &pTopicName) ) < X_ERR_SUCCESS ){
+                        shell_warn(shell, "Error while registering topic name: %d\r\n", ret);  
+                        return;
+                    }
+                    break;
+
+                case U_MQTT_SN_TOPIC_NAME_TYPE_ID_PREDEFINED:
+
+                    ;
+                    uint16_t topic_id_num = atoi(argv[2]);
+                    if( ( ret = uMqttClientSnSetTopicIdPredefined( topic_id_num, &pTopicName ) ) < X_ERR_SUCCESS ){
+                        shell_warn(shell, "Error while registering topic name: %d\r\n", ret);  
+                        return;
+                    }
+                    break;
+
+                case U_MQTT_SN_TOPIC_NAME_TYPE_NAME_SHORT:
+
+                    if( ( ret = uMqttClientSnSetTopicNameShort( argv[2], &pTopicName ) ) < X_ERR_SUCCESS ){
+                        shell_warn(shell, "Error while registering topic name: %d\r\n", ret);  
+                        return;
+                    }
+                    break;
+
+                case U_MQTT_SN_TOPIC_NAME_TYPE_MAX_NUM: 
+                    // steps for this case are performed in the default case that follows
+                    // both are invalid states
+
+                default: 
+                    shell_warn( shell, "Invalid topic type\r\n");  
+                    return; 
+            }
+
+
+            ret = xCellMqttSnClientPublish( &pTopicName, argv[3], strlen(argv[3]), qos, 0);  //0 is the retain
+            if(ret != 0){
+                shell_warn(shell, "xCellMqttSnClientPublish failed: %d\r\n", ret );
             }
             else{
                 shell_print(shell, "Published\r\n" );
@@ -1095,4 +849,18 @@ void xCellMqttSnSendCmd(const struct shell *shell, size_t argc, char **argv){
         }
 
 		return;
+}
+
+
+
+err_code xCellMqttSnDeleteAnywhereConfig( void ){
+
+    err_code ret;
+
+    xStorageDeleteFile( mqttsn_duration_fname ); 		
+    // in case of error do nothing - it is not important if this file exists or not
+   
+
+    ret = xStorageDeleteFile( mqttsn_anywhere_deviceID_fname );
+    return ret;
 }

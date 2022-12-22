@@ -28,7 +28,7 @@ As mentioned in the description of the topic, the message is a JSON packet which
 
 An example message is given below:
 ```
-{"Dev":"C210","Sensors":[{"ID":"BME280","mes":[{"nm":"Tm","vl":27.780},{"nm":"Hm","vl":43.391},{"nm":"Pr","vl":99.147}]},{"ID":"FXAS21002","mes":[{"nm":"Gx","vl":-0.010},{"nm":"Gy","vl":0.002},{"nm":"Gz","vl":0.002}]},{"ID":"LIS2DH12","mes":[{"nm":"Ax","vl":-0.115},{"nm":"Ay","vl":9.882},{"nm":"Az","vl":0.192}]},{"ID":"LIS3MDL","mes":[{"nm":"Mx","vl":-1.457},{"nm":"My","vl":-0.489},{"nm":"Mz","vl":-0.165}]},{"ID":"LTR303","mes":[{"nm":"Lt","vl":0}]},{"ID":"BQ27421","mes":[{"nm":"Volt","vl":4.169},{"nm":"SoC","vl":100.000}]},{"ID":"ADXL345","mes":[{"nm":"Ax","vl":-93.000},{"nm":"Ay","vl":906.000},{"nm":"Az","vl":31.000}]},{"ID":"MAXM10","mes":[{"nm":"Px","vl":38.0487025},{"nm":"Py","vl":23.8090018}]}]}
+{"Dev":"C210","Sensors":[{"ID":"BME280","mes":[{"nm":"Tm","vl":27.780},{"nm":"Hm","vl":43.391},{"nm":"Pr","vl":99.147}]},{"ID":"ICG20330","mes":[{"nm":"Gx","vl":-0.010},{"nm":"Gy","vl":0.002},{"nm":"Gz","vl":0.002}]},{"ID":"LIS2DH12","mes":[{"nm":"Ax","vl":-0.115},{"nm":"Ay","vl":9.882},{"nm":"Az","vl":0.192}]},{"ID":"LIS3MDL","mes":[{"nm":"Mx","vl":-1.457},{"nm":"My","vl":-0.489},{"nm":"Mz","vl":-0.165}]},{"ID":"LTR303","mes":[{"nm":"Lt","vl":0}]},{"ID":"BATTERY","mes":[{"nm":"Volt","vl":4.169},{"nm":"SoC","vl":100.000}]},{"ID":"MAXM10","mes":[{"nm":"Px","vl":38.0487025},{"nm":"Py","vl":23.8090018}]}]}
 ```
  If someone can copy/paste the above message to a JSON parser the structure of the message should be obvious:
 -	The “Dev” indicates the device, which in our case is “C210” (C210 is the circuit board in XPLR-IOT-1)
@@ -73,7 +73,7 @@ The measurement names (the possible values of key: “nm”) are given below
 |Humidity|Pr|
 |Pressure|Hm|
 |Battery Voltage|Volt|
-|Battery State of Chare|SoC|
+|Battery State of Charge|SoC|
 |Light|Lt|
 |Position X|Px|
 |Position Y|Py|
@@ -83,13 +83,12 @@ The sensor IDs (the possible values of key “ID”) are given below. The follow
 |Sensors ID|Sensor Type|Has Measurements|
 |:----|:----|:----|
 |BME280|Environmental Sensor|Tm, Pr, Hm|
-|ADXL345|Accelerometer|Ax,Ay,Az|
 |LIS2DH12|Accelerometer|Ax,Ay,Az|
 |LTR303|Light|Lt|
-|FXAS21002|Gyroscope|Gx,Gy,Gz|
+|ICG20330|Gyroscope|Gx,Gy,Gz|
 |LIS3MDL|Magnetometer|Mx, My, Mz|
 |MAXM10|GNSS/Position|Px,Py|
-|BQ27421|Battery Fuel Gauge|Volt, SoC|
+|BATTERY|Battery Fuel Gauge|Volt, SoC|
 
 ##### Errors
 Some sensor measurements might not be available at any given sampling period (broken sensor, could not get value etc.). In that case the measurement list won’t be sent. Instead, an error key will be sent which will contain a string describing the error. Below a JSON string example of a sensor with an error is given.
@@ -114,12 +113,12 @@ After the preparation of the JSON packet which contains the sensor measurements 
 The reason for the Base64 encoding is that the JSON packet requires some double quotes “in its format. These double quotes when sent from the cellular module are aborted and that breaks the JSON format. To get around that issue the JSON string is encoded to Base64
 So, the message received in Thingstream portal is something like:
 ```
-eyJEZXYiOiJDMjEwIiwiU2Vuc29ycyI6W3siSUQiOiJCTUUyODAiLCJtZXMiOlt7Im5tIjoiVG0iLCJ2bCI6MjcuNzgwfSx7Im5tIjoiSG0iLCJ2bCI6NDMuMzkxfSx7Im5tIjoiUHIiLCJ2bCI6OTkuMTQ3fV19LHsiSUQiOiJGWEFTMjEwMDIiLCJtZXMiOlt7Im5tIjoiR3giLCJ2bCI6LTAuMDEwfSx7Im5tIjoiR3kiLCJ2bCI6MC4wMDJ9LHsibm0iOiJHeiIsInZsIjowLjAwMn1dfSx7IklEIjoiTElTMkRIMTIiLCJtZXMiOlt7Im5tIjoiQXgiLCJ2bCI6LTAuMTE1fSx7Im5tIjoiQXkiLCJ2bCI6OS44ODJ9LHsibm0iOiJBeiIsInZsIjowLjE5Mn1dfSx7IklEIjoiTElTM01ETCIsIm1lcyI6W3sibm0iOiJNeCIsInZsIjotMS40NTd9LHsibm0iOiJNeSIsInZsIjotMC40ODl9LHsibm0iOiJNeiIsInZsIjotMC4xNjV9XX0seyJJRCI6IkxUUjMwMyIsIm1lcyI6W3sibm0iOiJMdCIsInZsIjowfV19LHsiSUQiOiJCUTI3NDIxIiwibWVzIjpbeyJubSI6IlZvbHQiLCJ2bCI6NC4xNjl9LHsibm0iOiJTb0MiLCJ2bCI6MTAwLjAwMH1dfSx7IklEIjoiQURYTDM0NSIsIm1lcyI6W3sibm0iOiJBeCIsInZsIjotOTMuMDAwfSx7Im5tIjoiQXkiLCJ2bCI6OTA2LjAwMH0seyJubSI6IkF6IiwidmwiOjMxLjAwMH1dfSx7IklEIjoiTUFYTTEwIiwibWVzIjpbeyJubSI6IlB4IiwidmwiOjM4LjA0ODcwMjV9LHsibm0iOiJQeSIsInZsIjoyMy44MDkwMDE4fV19XX0=
+eyJEZXYiOiJDMjEwIiwiU2Vuc29ycyI6W3siSUQiOiJCTUUyODAiLCJtZXMiOlt7Im5tIjoiVG0iLCJ2bCI6MjcuNzgwfSx7Im5tIjoiSG0iLCJ2bCI6NDMuMzkxfSx7Im5tIjoiUHIiLCJ2bCI6OTkuMTQ3fV19LHsiSUQiOiJJQ0cyMDMzMCIsIm1lcyI6W3sibm0iOiJHeCIsInZsIjotMC4wMTB9LHsibm0iOiJHeSIsInZsIjowLjAwMn0seyJubSI6Ikd6IiwidmwiOjAuMDAyfV19LHsiSUQiOiJMSVMyREgxMiIsIm1lcyI6W3sibm0iOiJBeCIsInZsIjotMC4xMTV9LHsibm0iOiJBeSIsInZsIjo5Ljg4Mn0seyJubSI6IkF6IiwidmwiOjAuMTkyfV19LHsiSUQiOiJMSVMzTURMIiwibWVzIjpbeyJubSI6Ik14IiwidmwiOi0xLjQ1N30seyJubSI6Ik15IiwidmwiOi0wLjQ4OX0seyJubSI6Ik16IiwidmwiOi0wLjE2NX1dfSx7IklEIjoiTFRSMzAzIiwibWVzIjpbeyJubSI6Ikx0IiwidmwiOjB9XX0seyJJRCI6IkJBVFRFUlkiLCJtZXMiOlt7Im5tIjoiVm9sdCIsInZsIjo0LjE2OX0seyJubSI6IlNvQyIsInZsIjoxMDAuMDAwfV19LHsiSUQiOiJNQVhNMTAiLCJtZXMiOlt7Im5tIjoiUHgiLCJ2bCI6MzguMDQ4NzAyNX0seyJubSI6IlB5IiwidmwiOjIzLjgwOTAwMTh9XX1dfQ==
 ```
 The above message, when Base64 decoded, results in:
 
 ```
-{"Dev":"C210","Sensors":[{"ID":"BME280","mes":[{"nm":"Tm","vl":27.780},{"nm":"Hm","vl":43.391},{"nm":"Pr","vl":99.147}]},{"ID":"FXAS21002","mes":[{"nm":"Gx","vl":-0.010},{"nm":"Gy","vl":0.002},{"nm":"Gz","vl":0.002}]},{"ID":"LIS2DH12","mes":[{"nm":"Ax","vl":-0.115},{"nm":"Ay","vl":9.882},{"nm":"Az","vl":0.192}]},{"ID":"LIS3MDL","mes":[{"nm":"Mx","vl":-1.457},{"nm":"My","vl":-0.489},{"nm":"Mz","vl":-0.165}]},{"ID":"LTR303","mes":[{"nm":"Lt","vl":0}]},{"ID":"BQ27421","mes":[{"nm":"Volt","vl":4.169},{"nm":"SoC","vl":100.000}]},{"ID":"ADXL345","mes":[{"nm":"Ax","vl":-93.000},{"nm":"Ay","vl":906.000},{"nm":"Az","vl":31.000}]},{"ID":"MAXM10","mes":[{"nm":"Px","vl":38.0487025},{"nm":"Py","vl":23.8090018}]}]}
+{"Dev":"C210","Sensors":[{"ID":"BME280","mes":[{"nm":"Tm","vl":27.780},{"nm":"Hm","vl":43.391},{"nm":"Pr","vl":99.147}]},{"ID":"ICG20330","mes":[{"nm":"Gx","vl":-0.010},{"nm":"Gy","vl":0.002},{"nm":"Gz","vl":0.002}]},{"ID":"LIS2DH12","mes":[{"nm":"Ax","vl":-0.115},{"nm":"Ay","vl":9.882},{"nm":"Az","vl":0.192}]},{"ID":"LIS3MDL","mes":[{"nm":"Mx","vl":-1.457},{"nm":"My","vl":-0.489},{"nm":"Mz","vl":-0.165}]},{"ID":"LTR303","mes":[{"nm":"Lt","vl":0}]},{"ID":"BATTERY","mes":[{"nm":"Volt","vl":4.169},{"nm":"SoC","vl":100.000}]},{"ID":"MAXM10","mes":[{"nm":"Px","vl":38.0487025},{"nm":"Py","vl":23.8090018}]}]}
 ```
 Which is the JSON packet containing the measurements.
 
@@ -138,12 +137,11 @@ The topics, aliases etc. are presented in the table that follows
 |Sensors ID|Topic Name|Topic Path|Topic alias|Example Message String (decoded)|
 |:----|:----|:----|:----|:----|
 |BME280|Environmental Measurements|c210/sensor/environmental|501|{"ID":"BME280","mes":[ {"nm":"Tm","vl":29.520},{"nm":"Hm","vl":28.334},{"nm":"Pr","vl":98.990}]}|
-|BQ27421|Battery Measurements|c210/sensor/battery|502|{"ID":"BQ27421","mes":[ {"nm":"Volt","vl":4.1},{"nm":"SoC","vl":100}]}|
-|ADXL345|Accelerometer ADXL345 measurements|c210/sensor/accelerometer/adxl345|503|{"ID":"ADXL345","mes":[ {"nm":"Ax","vl":25.33333},{"nm":"Ay","vl":67.55333},{"nm":"Az","vl":33.44333}]}|
+|BATTERY|Battery Measurements|c210/sensor/battery|502|{"ID":"BATTERY","mes":[ {"nm":"Volt","vl":4.1},{"nm":"SoC","vl":100}]}|
 |LIS2DH12|Accelerometer LIS2DH12 measurements|c210/sensor/accelerometer/is2dh12|504|{"ID":"LIS2DH12","mes":[ {"nm":"Ax","vl":25.33333},{"nm":"Ay","vl":67.55333},{"nm":"Az","vl":33.44333}]}|
 |LIS3MDL|Magnetometer LIS3MDL measurements|c210/sensor/magnetometer|505|{"ID":"LIS3MDL","mes":[ {"nm":"Mx","vl":25.33333},{"nm":"My","vl":67.55333},{"nm":"Mz","vl":33.44333}]}|
 |LTR303|Light LTR303 measurements|c210/sensor/light|506|{"ID":"LTR303","mes":[ {"nm":"Lt","vl":190}]}|
-|FXAS21002|Gyroscope FXAS21002 measurements|c210/sensor/gyroscope|507|{"ID":"FXAS21002","mes":[ {"nm":"Gx","vl":25.33333},{"nm":"Gy","vl":67.55333},{"nm":"Gz","vl":33.44333}]}|
+|ICG20330|Gyroscope ICG20330 measurements|c210/sensor/gyroscope|507|{"ID":"ICG20330","mes":[ {"nm":"Gx","vl":25.33333},{"nm":"Gy","vl":67.55333},{"nm":"Gz","vl":33.44333}]}|
 |MAXM10|Position|c210/position/nmea|508|{"ID":"MAXM10","mes":[{"nm":"Px","vl":38.0499625},{"nm":"Py","vl":23.8088328}]}|
 
 These topics should be created in Thingstream portal, before trying to send data via Cellular (they should be created automatically when the redemption code is used) 

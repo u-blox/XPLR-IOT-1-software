@@ -175,6 +175,32 @@ err_code xStorageReadFile(void *data, char *filename, uint32_t max_size){
 }
 
 
+err_code xStorageDeleteFile( char *filename ){
+
+	int rc;
+	char fname[MAX_PATH_LEN];
+
+	if( !gIsMounted ){
+		rc = xStorageInit();
+		if( rc < 0){
+			return rc;
+		}
+	}
+    
+	snprintf(fname, sizeof(fname), "%s/%s", mp->mnt_point, filename);
+	rc = fs_unlink( fname );
+	if( rc < 0){
+		//if (rc == -2 ) {
+			//LOG_WRN("File does not exist. No wifi saved\r\n");
+		//}
+		LOG_ERR("Error deleting file: %d\r\n", rc);
+		//xStorageDeinit();
+		return rc;
+	}
+
+	return rc;
+}
+
 
 err_code xStorageSaveFile(void *data, char *filename, uint32_t data_size){
 

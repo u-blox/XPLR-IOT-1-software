@@ -57,7 +57,7 @@ The exact flow of the function and the messages format are described in the resp
 
 |Command|Command example|Description|
 |:----|:----|:----|
-|functions status|functions status|Reports back to terminal if the function is active and the setting of the sampling period. <br/> The status can be:  -Disabled / -WiFi / -Cell .  The status changes once the requested operation (WiFi, Cell) has been activated successfully. While the operation is still in progress (e.g. WiFi tries to connect) the status seems disabled|
+|functions status|functions status|Reports back to terminal if the function is active and the setting of the sampling period. <br/> The status can be:  -Disabled / -WiFi / -Cell .  The status changes once the requested operation (Wi-Fi, Cell) has been activated successfully. While the operation is still in progress (e.g. Wi-Fi tries to connect) the status seems disabled|
 |functions set_period <period in milliseconds>|functions set_period 10000|Sets the sampling period of the function. This command can be used only if the function is currently disabled. If it is active the access to this command is denied. So  if the user wants to change the period, he should disable the function (if active), then send this command to change the sampling period and then re-activate the function.|
 |functions wifi_start|functions wifi_start|This command starts the sensor aggregation function using wi-fi. If setup successfully the device will start sending sampling data via Wi-Fi at the requested period (the period can be checked with the status command) and function status will update. If the setup fails, the device will try to reverse any configuration performed. The status will not update. |
 |functions wifi_stop|functions wifi_stop|If the wifi sensor aggregation function is active, this command deactivates it and stops the function.|
@@ -86,6 +86,30 @@ Independent sensor commands are given below with sensor BME280 as example:
 |sensors BME280 set_period <period in milliseconds>|Sensors BME280 set_period 10000|Sets the sampling period of the sensor. It can be applied when the sensor is enabled but will take effect after the next measurement (with the previous sampling rate). If you want for the new sampling period to take immediate effect, disable the sensor, set its period, and enable it again |
 |sensors BME280 publish <on/off>|sensors BME280 publish on / sensors BME280 publish off|Disables/Enables publish of this sensor measurements. The sensor can be enabled but its measurements are not published until this command sets its publish attribute to on. Setting the attribute to on, does not mean the measurements are sent to Thingstream. An active cell or wifi connection should be enabled (see module commands). If this is not the case the setting is still valid. As soon as a connection to Thingstream is established the sensor will start sending its measurements immediately if publish attribute is enabled.|
 
+##### Known Issue in Sensor commands
+
+When the device is connected to Thingstream via Cellular and the command to send independent sensor data is sent (e.g. sensors BME280 publish on), the data are published without problems in the respective topic (*c210/sensor/environmental*).
+
+When the device is connected to Thingstream via Wi-Fi and the command to send independent sensor data is sent (e.g. sensors BME280 publish on), then an error will be triggered and the data will not be sent. This is due to the imlementation of MQTT Wi-Fi library in ubxlib, which restricts the name of the topic to around 23 characters for Sensor Aggregation example. So topic names smaller than 23 characters work ok, while publishing to topics bigger than 23 will produce an error.
+
+You can see in the table below which sensor/topics work ok and which will produce an error
+
+|Sensor Topics that work|Sensor Topics that fail|
+|:----|:----|
+|All sensors (main functionality)|Environmental ( bme280 )|
+|Battery|Accelerometer ( lis2dh12 )|
+|Light ( ltr303 )|Magnetometer (lis3mdl) |
+|Gyro ( icg20330 ) |||
+|Position ( MAXM10S ) ||
+
+
+###### How to Fix Issue in Sensor commands
+This is a temporary ubxlib issue that will be solved soon. If you want to workaround through this and make all topics work you can do the following:
+After you download ubxlib files in your repo (e.g. by using `git submodule update --init`) navigate to ubxlib/wifi//src/u_wifi_mqtt.c file and find the implementation of function establishMqttConnectionToBroker. The line `char url[200]` is the one causing the problem. Change 200 to something bigger (e.g. 400), recompile the project, program it to XPLR-IOT-1 and all topics should work.
+
+![ubxlib_fix.jpg.](../../readme_images/ubxlib_fix.jpg "ubxlib_fix.jpg")
+
+
 #### Module commands
 
 ##### MAXM10S commands
@@ -108,12 +132,12 @@ Commands to handle NINA-W156
 |:----|:----|:----|
 |modules NINAW156 power_on|modules NINAW156 power_on|Just powers up the module. During initialization the module is powered off by default|
 |modules NINAW156 power_off|modules NINAW156 power_off|Powers off the module.|
-|modules NINAW156 init|modules NINAW156 init|Initializes ubxlib to use NINAW156 and prepares the module to connect to a WiFi network. A WiFi network (SSIS and password) should be saved in the device in order for this command to work otherwise an error will be returned (see provision command)|
-|modules NINAW156 deinit|modules NINAW156 deinit|Deinitializes ubxlib and removes the module and the network (does not erase the WiFi credentials from the device)|
+|modules NINAW156 init|modules NINAW156 init|Initializes ubxlib to use NINAW156 and prepares the module to connect to a Wi-Fi network. A Wi-Fi network (SSID and password) should be saved in the device in order for this command to work otherwise an error will be returned (see provision command)|
+|modules NINAW156 deinit|modules NINAW156 deinit|Deinitializes ubxlib and removes the module and the network (does not erase the Wi-Fi credentials from the device)|
 |modules NINAW156 connect|modules NINAW156 connect|Connects to the network saved in the memory of the device (see  provision command)|
 |modules NINAW156 disconnect|modules NINAW156 disconnect|Disconnects from a wifi network|
-|modules NINAW156 provision "SSID" "optional:password"|modules NINAW156 provision open_network_name/ modules NINAW156 provision net_name pass12323|The command to provide the SSID and password of a WiFi network. If a password is not provided, the network is considered an open network|
-|modules NINAW156 type_cred|modules NINAW156 type_cred|Types the saved and active WiFi network credentials saved|
+|modules NINAW156 provision "SSID" "optional:password"|modules NINAW156 provision open_network_name/ modules NINAW156 provision net_name pass12323|The command to provide the SSID and password of a Wi-Fi network. If a password is not provided, the network is considered an open network|
+|modules NINAW156 type_cred|modules NINAW156 type_cred|Types the saved and active Wi-Fi network credentials saved|
 |modules NINAW156 comm=nora|modules NINAW156 comm=nora|Connects the NINAW156 uart serial output to NORA-B1 (which runs this firmware). This is essential in order for the firmware to be able to control the NINA module|
 modules NINAW156 comm=usb|modules NINAW156 comm=usb|Used only if the user want to connect to the uart of NINAW156 through a terminal from his PC, or if he wants to use NINAW156 with s-center. If the usb comm is selected the firmware cannot control NINAW156 (it can only power it on/off)
 
@@ -152,6 +176,22 @@ These commands control the MQTT-SN client of SARAR5 and are used to connect to M
 |modules MQTTSN close|modules MQTTSN close|Closes the MQTTSN client|
 |modules MQTTSN disconnect|modules MQTTSN disconnect|Disconnects the MQTTSN client|
 |modules MQTTSN save "Plan" "Device ID" "Connection Duration in seconds: if anywhere plan is selected "|modules MQTTSN save anywhere device2834762 600 / modules MQTTSN save flex device2834762|Command to be used before the first attempt to connect via MQTTSN to Thingstream. Used to provide the credentials from thingstream portal to the device|
-|modules MQTT send "type" "topic" "message" "QOS"|"QOS" = 0,1,2,3 (Quality of service) / "type"=normal,short,pre (pre stands for predefined) // modules MQTTSN send pre 501 hello_msg 0|Send a message to Thingstream, at a topic with the requested Quality of Service The type is according to MQTTSN types for topics|
+|modules MQTT send "type" "topic" "message" "QOS"|"QOS" = 0,1,2,3 (Quality of service) / "type"=normal,short,pre (pre stands for predefined) // modules MQTTSN send pre 501 hello_msg 0|Send a message to Thingstream, at a topic with the requested Quality of Service The type is according to MQTTSN types for topics<br>**Note:** QOS=3 publish of messages in  a connectionless state is not supported in v1.0.0 but will be added soon.<br>You can still send with QOS=3 but the device should be connected to the broker|
 |modules MQTTSN status|modules MQTTSN status|Type information about the status of the MQTTSN client from a firmware (ubxlib) perspective|
 |modules MQTTSN type|modules MQTTSN type|Type MQTTSN credentials stored in memory|
+
+##### Bluetooth LE commands
+These commands control the Bluetooth LE functionality. The Bluetooth LE stack is initialized at startup and starts advertising by default. See more about Bluetooth LE [here](../ublox_modules/ble/Readme.md)
+|Command|Command example|Description|
+|:----|:----|:----|
+|modules BLE enable| modules BLE enable |This command starts Bluetooth LE advertising (XPLR-IOT-1 is visible by other Bluetooth LE devices). If XPLR-IOT-1 is already advertising or connected to another Bluetooth LE device, then this command has no effect|
+modules BLE disable |modules BLE disable |This command stops Bluetooth LE advertising (XPLR-IOT-1 is NOT visible by other Bluetooth LE devices).|
+|modules BLE disconnect|modules BLE disconnect|If XPLR-IOT-1 is connected to another Bluetooth LE device, this command disconnects XPLR-IOT-1 from this device|
+
+##### NFC commands
+These commands control the NFC functionality. The NFC  stack is active on startup by default. See more about NFC [here](../ublox_modules/nfc/Readme.md)
+|Command|Command example|Description|
+|:----|:----|:----|
+|modules NFC on| modules NFC on |Activate NFC|
+|modules NFC off| modules NFC off |Deactivate NFC|
+

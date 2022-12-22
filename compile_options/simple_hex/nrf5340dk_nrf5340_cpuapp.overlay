@@ -11,22 +11,16 @@
 		label = "BME280";
 	};
 
-	adxl345@1D {
-		compatible = "adi,adxl345";
-		reg = <0x1D>;
-		label = "ADXL345";
-	};
-
 	lis3mdl@1E {
 		compatible = "st,lis3mdl-magn";
 		reg = <0x1E>;
 		label = "LIS3MDL";
 	};
 
-	fxas21002@20 {
-		compatible = "nxp,fxas21002";
-		reg = <0x20>;
-		label = "FXAS21002";
+	icg20330: icg20330@68 {
+		compatible = "tdk,icg20330";
+		reg = <0x68>;
+		label = "ICG20330";
 	};
 
 	lis2dh@19 {
@@ -41,6 +35,14 @@
 		label = "LTR303"; 
 	};
 
+	// Its either bq27520 or bq27421 battery gauge
+	bq27520: bq27520@55 {
+		compatible = "ti,bq27520";
+		label = "BQ27520";
+		reg = <0x55>;
+	};
+
+	// Its either bq27520 or bq27421 battery gauge
 	bq27421@55 {
 		compatible = "ti,bq274xx";
 		label = "BQ274XX";
@@ -50,6 +52,7 @@
 		taper-current = <45>;
 		terminate-voltage = <3000>;
 	};
+
 };
 
 // console uart

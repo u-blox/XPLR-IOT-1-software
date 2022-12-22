@@ -54,10 +54,13 @@
 #define  mqtt_username_fname  		"mqtt_user"
 #define  mqtt_psw_fname  		    "mqtt_pass"
 
-//Filenames for MQTTSN configuration
+// Filenames for MQTTSN configuration
 #define mqttsn_flex_deviceID_fname		"mqttsn_flex_device"
 #define mqttsn_anywhere_deviceID_fname	"mqttsn_anywhere_device"
 #define mqttsn_duration_fname			"mqttsn_duration"
+
+// Thingstream Domain filename (only used in BLE mobile app commands)
+#define thingstream_domain_fname        "thingstr_domain"
 
 
 
@@ -99,6 +102,14 @@ err_code xStorageReadFile(void *data, char *filename, uint32_t max_size);
  * @return          zero on success else negative error code.
  */
 err_code xStorageSaveFile(void *data, char *filename, uint32_t data_size);
+
+
+/** Delete a file from memory
+ *
+ * @param filename  Filename string of the file to be deleted
+ * @return          zero on success else negative error code.
+ */
+err_code xStorageDeleteFile( char *filename );
 
 
 
@@ -191,6 +202,10 @@ err_code xStorageSaveMqttSnConfig(xCellMqttSnConfig_t mqttsnConnection);
  * @return                  zero on success else negative error code.
  */
 err_code xStorageReadMqttSnConfig( xCellMqttSnConfig_t *mqttsnConnection, xCellMqttSnPlan_t plan);
+
+
+
+
 
 
 

@@ -45,12 +45,11 @@
  */
 typedef enum{
     bme280_t = 0,
-    adxl345_t,
-    bq27421_t,
+    battery_gauge_t,
     lis2dh12_t,
     lis3mdl_t,
     ltr303_t,
-    fxas21002_t,
+    icg20330_t,
     maxm10_t,
     max_sensors_num_t
 }xSensType_t;

@@ -49,13 +49,13 @@ Power on and off commands have already been discussed (see [here](../Readme.md))
 Provision and type_cred (type credentials) commands are used to provide information about the Wi-Fi network the user wants to connect to, to the device (see Configure Wi-Fi section)
 
 #### Init/Deinit
-Init command initialized the module so that it will be ready to connect to a Wi-Fi network. Initialization includes all operations necessary, such as powering up the module (if not already powered up), reading the memory for saved Wi-Fi network credentials, setting up ubxlib environment for connection etc.
+Init command powers up (if not already powered up), sets up and opens the Wi-Fi device in a ubxlib context so that it is ready to execute a connect command.
 
 Deinit does the exact opposite of init. It disconnects the module if connected and clears ubxlib status so that it can be used by another module if necessary.
 
 #### Connect/Disconnect
 
-If the module has been initialized the connect command just connects the module to the Wi-Fi network provided with the provision command. If the init command has not been issued, it is called internally by the connect command.
+If the module has been initialized, the connect command reads the memory for valid saved Wi-Fi network credentials, sets up the connection parameters and connects the module to the Wi-Fi network provided with the provision command. If the init command has not been issued, it is called internally by the connect command.
 
 Disconnect, just disconnects the module from the network (does not perform any deinitialization actions).
 

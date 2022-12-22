@@ -24,12 +24,11 @@
 
 #include <shell/shell.h>
 #include "x_sens_bme280.h"
-#include "x_sens_adxl345.h"
 #include "x_sens_lis3mdl.h"
-#include "x_sens_fxas21002.h"
+#include "x_sens_icg20330.h"
 #include "x_sens_lis2dh12.h"
 #include "x_sens_ltr303.h"
-#include "x_sens_bq27421.h"
+#include "x_sens_battery_gauge.h"
 
 #include "x_pos_maxm10s.h"
 
@@ -81,11 +80,8 @@ static void xSensCmdTypeStatus(const struct shell *shell, size_t argc, char **ar
                         case bme280_t: SensorStatus = xSensBme280GetStatus();
                                         strcpy(SensorNameStr, JSON_ID_SENSOR_BME280);
                                         break;
-                        case adxl345_t: SensorStatus = xSensAdxl345GetStatus();
-                                        strcpy(SensorNameStr, JSON_ID_SENSOR_ADXL345);
-                                        break;
-                        case bq27421_t: SensorStatus = xSensBq27421GetStatus();
-                                        strcpy(SensorNameStr, JSON_ID_SENSOR_BQ27421);
+                        case battery_gauge_t: SensorStatus = xSensBatGaugeGetStatus();
+                                        strcpy(SensorNameStr, JSON_ID_SENSOR_BATTERY);
                                         break;
                         case lis2dh12_t: SensorStatus = xSensLis2dh12GetStatus();
                                         strcpy(SensorNameStr, JSON_ID_SENSOR_LIS2DH12);
@@ -96,8 +92,8 @@ static void xSensCmdTypeStatus(const struct shell *shell, size_t argc, char **ar
                         case ltr303_t: SensorStatus = xSensLtr303GetStatus();
                                         strcpy(SensorNameStr, JSON_ID_SENSOR_LTR303);
                                         break;
-                        case fxas21002_t: SensorStatus = xSensFxas21002GetStatus();
-                                        strcpy(SensorNameStr, JSON_ID_SENSOR_FXAS21002);
+                        case icg20330_t: SensorStatus = xSensIcg20330GetStatus();
+                                        strcpy(SensorNameStr, JSON_ID_SENSOR_ICG20330);
                                         break;
                         case maxm10_t : SensorStatus = xPosMaxM10GetSensorStatus();
                                         strcpy(SensorNameStr, JSON_ID_SENSOR_MAXM10);
@@ -135,15 +131,6 @@ SHELL_STATIC_SUBCMD_SET_CREATE(BME280,
         SHELL_SUBCMD_SET_END
 );
 
-//sensors ADXL345 sub-commands (level 2)
-SHELL_STATIC_SUBCMD_SET_CREATE(ADXL345,
-        SHELL_CMD(enable, NULL, "Enable ADXL345 measurements (set status to Running)", xSensAdxl345Enable),
-        SHELL_CMD(disable,NULL, "Disable ADXL345 measurements (set status to Suspended)", xSensAdxl345Disable),
-        SHELL_CMD(set_period,NULL, "Set ADXL345 period in ms", xSensAdxl345UpdatePeriodCmd),
-        SHELL_CMD(publish,NULL, "Publish ADXL345 measurements: parameters on/off. Eg: publish on ", xSensAdxl345EnablePublishCmd),
-        SHELL_SUBCMD_SET_END
-);
-
 
 //sensors LIS3MDL sub-commands (level 2)
 SHELL_STATIC_SUBCMD_SET_CREATE(LIS3MDL,
@@ -154,12 +141,12 @@ SHELL_STATIC_SUBCMD_SET_CREATE(LIS3MDL,
         SHELL_SUBCMD_SET_END
 );
 
-//sensors FXAS21002 sub-commands (level 2)
-SHELL_STATIC_SUBCMD_SET_CREATE(FXAS21002,
-        SHELL_CMD(enable, NULL, "Enable FXAS21002 measurements (set status to Running)", xSensFxas21002Enable),
-        SHELL_CMD(disable,NULL, "Disable FXAS21002 measurements (set status to Suspended)", xSensFxas21002Disable),
-        SHELL_CMD(set_period,NULL, "Set FXAS21002 period in ms", xSensFxas21002UpdatePeriodCmd),
-        SHELL_CMD(publish,NULL, "Publish FXAS21002 measurements: parameters on/off. Eg: publish on ", xSensFxas21002EnablePublishCmd),
+//sensors ICG20330 sub-commands (level 2)
+SHELL_STATIC_SUBCMD_SET_CREATE(ICG20330,
+        SHELL_CMD(enable, NULL, "Enable ICG20330 measurements (set status to Running)", xSensIcg20330Enable),
+        SHELL_CMD(disable,NULL, "Disable ICG20330 measurements (set status to Suspended)", xSensIcg20330Disable),
+        SHELL_CMD(set_period,NULL, "Set ICG20330 period in ms", xSensIcg20330UpdatePeriodCmd),
+        SHELL_CMD(publish,NULL, "Publish ICG20330 measurements: parameters on/off. Eg: publish on ", xSensIcg20330EnablePublishCmd),
         SHELL_SUBCMD_SET_END
 );
 
@@ -181,12 +168,12 @@ SHELL_STATIC_SUBCMD_SET_CREATE(LTR303,
         SHELL_SUBCMD_SET_END
 );
 
-//sensors BQ27421 sub-commands (level 2)
-SHELL_STATIC_SUBCMD_SET_CREATE(BQ27421,
-        SHELL_CMD(enable, NULL, "Enable BQ27421 measurements  (set status to Running)", xSensBq27421Enable),
-        SHELL_CMD(disable,NULL, "Disable BQ27421 measurements  (set status to Suspended)", xSensBq27421Disable),
-        SHELL_CMD(set_period,NULL, "Set BQ27421 period in ms", xSensBq27421UpdatePeriodCmd),
-        SHELL_CMD(publish,NULL, "Publish BQ27421 measurements: parameters on/off. Eg: publish on ", xSensBq27421EnablePublishCmd),
+//sensors Battery Gauge sub-commands (level 2)
+SHELL_STATIC_SUBCMD_SET_CREATE(BATTERY,
+        SHELL_CMD(enable, NULL, "Enable Battery Gauge measurements  (set status to Running)", xSensBatGaugeEnable),
+        SHELL_CMD(disable,NULL, "Disable Battery Gauge measurements  (set status to Suspended)", xSensBatGaugeDisable),
+        SHELL_CMD(set_period,NULL, "Set Battery Gauge period in ms", xSensBatGaugeUpdatePeriodCmd),
+        SHELL_CMD(publish,NULL, "Publish Battery Gauge measurements: parameters on/off. Eg: publish on ", xSensBatGaugeEnablePublishCmd),
         SHELL_SUBCMD_SET_END
 );
 
@@ -207,12 +194,11 @@ SHELL_STATIC_SUBCMD_SET_CREATE(publish,
 /* Creating subcommands (level 1 command) array for command "sensors". */
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_sensors,
         SHELL_CMD(BME280, &BME280, "BME280 environmental sensor control.", NULL),
-        SHELL_CMD(ADXL345, &ADXL345, "ADXL345 accelerometer sensor control", NULL),
         SHELL_CMD(LIS3MDL, &LIS3MDL, "LIS3MDL magnetometer sensor control", NULL),
-        SHELL_CMD(FXAS21002, &FXAS21002, "FXAS21002 gyro sensor control", NULL),
+        SHELL_CMD(ICG20330, &ICG20330, "ICG20330 gyro sensor control", NULL),
         SHELL_CMD(LIS2DH12, &LIS2DH12, "LIS2DH12 accelerometer sensor control", NULL),
         SHELL_CMD(LTR303, &LTR303, "LTR303 light sensor control", NULL),
-        SHELL_CMD(BQ27421, &BQ27421, "BQ27421 fuel gauge control", NULL),
+        SHELL_CMD(BATTERY, &BATTERY, "Battery Gauge control", NULL),
         SHELL_CMD(status,   NULL, "Get sensors current status", xSensCmdTypeStatus),
         SHELL_CMD(enable,   &enable, "Enable/Disable all sensors: <enable all>, <enable none>", NULL),
         SHELL_CMD(publish,   &publish, "Enable/Disable publish of all sensors: <publish all>, <publish none>", NULL),

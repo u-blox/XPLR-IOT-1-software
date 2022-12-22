@@ -30,6 +30,8 @@
 #include "x_cell_saraR5.h"
 #include "x_wifi_mqtt.h"
 #include "x_cell_mqttsn.h"
+#include "x_ble.h"
+#include "x_nfc.h"
 
 
 
@@ -46,9 +48,23 @@ static void xModulesCmdTypeStatus(const struct shell *shell, size_t argc, char *
         char *comm_str[2] = {"USB to UART comm","NORA comm"};
         char *powered_str[2] = {"Powered Off", "Powered On"};
         char *initialized_str[2] = {"Not Iniatialized", "Initialized"};
-        char *ubxlibStatus_str[4] = {"Not Initialized", "Initialized", "Net Initialized", "Net Added"};
+        char *ubxlibStatus_str[4] = {"Not Initialized", "Initialized", "Device API Initialized", "Device Opened"};
         char *yesNoBoolStr[2] = {"No","Yes"};
+        
+        // Ble status string descriptions
+        const char *const xBleStatusStr[]={
+	        [ xBleNotInitialized ]  = "Ble Stack Not Initialized",
+                [ xBleIsInitialized ]   = "Ble Initialized, not advertising, not connected",
+                [ xBleIsAdvertising ]   = "Ble Advertising, not connected",
+                [ xBleIsConnected ]     = "Ble Connected"
+        };
 
+        // NFC status string descriptions
+        const char *const xNfcStatusStr[]={
+	        [ xNfcNotConfigured ]  = "NFC Not Configured yet",
+                [ xNfcClose ]          = "NFC Closed",
+                [ xNfcOpen ]           = "NFC Open"
+        };
 
         // //MAXM10
         xPosMaxM10Status_t maxstatus = xPosMaxM10GetModuleStatus();
@@ -97,6 +113,23 @@ SARAR5 --------------------------------\r\n\
         xWifiMqttClientStatusCmd(shell, argc, argv);
         xCellMqttSnClientStatusCmd(shell, argc, argv);
 
+        // Type BLE status
+        xBleStatus_t bleStatus = xBleGetStatus();
+
+        shell_print(shell,"\r\n\
+NORA-B1 BLE --------------------------------\r\n\
+        - Status: %s \r\n",
+        xBleStatusStr[ (int)bleStatus ] );
+
+
+        // Type NFC status
+        xNfcStatus_t nfcStatus = xNfcGetStatus();
+
+        shell_print(shell,"\r\n\
+NORA-B1 NFC --------------------------------\r\n\
+        - Status: %s \r\n",
+        xNfcStatusStr[ (int)nfcStatus ] );
+
         return;
 }
 
@@ -122,9 +155,11 @@ SHELL_STATIC_SUBCMD_SET_CREATE(MAXM10S,
 
 SHELL_STATIC_SUBCMD_SET_CREATE(NINAW156,
         SHELL_CMD(power_on, NULL, "Power On NINA-W156 module", xWifiNinaPowerOn),
-        SHELL_CMD(power_off, NULL, "Power Off NINAW156 module (also disconnect,deconfig if necessary)", xWifiNinaPowerOff),
-        SHELL_CMD(init,NULL, "Initializes NINAW156 and saved network. Prepare for connection", xWifiNinaInit),
-        SHELL_CMD(deinit,NULL, "Deinitializes network", xWifiNinaDeinit),
+        SHELL_CMD(power_off, NULL, "Power Off NINAW156 module (also disconnect and deinit if necessary)", xWifiNinaPowerOff),
+        SHELL_CMD(init,NULL, "Initializes NINAW156 device. Prepare for connection", xWifiNinaInit),
+        SHELL_CMD(deinit,NULL, "Deinitializes NINAW156 device", xWifiNinaDeinit),
+        SHELL_CMD(scan,NULL, "Scan for WiFi networks", xWifiNinaScanCmd),
+        SHELL_CMD(last_scan_results,NULL, "Type last WiFi scan results", xWifiNinaTypeLastScanResults),       
         SHELL_CMD(connect, NULL, "Connect to saved WiFi network", xWifiNinaConnect),
         SHELL_CMD(disconnect,NULL, "Disconnect from WiFi network", xWifiNinaDisconnect),
         SHELL_CMD(provision,NULL, "Provide WiFi network credentials: provision <SSID> <Password> : if open network do not provide <Password>", xWifiNinaProvisionCmd),
@@ -175,8 +210,21 @@ SHELL_STATIC_SUBCMD_SET_CREATE(SARAR5,
         SHELL_CMD(init, NULL, "config", xCellSaraInit),
         SHELL_CMD(deinit, NULL, "disconnect, deinit and power down", xCellSaraDeinit),
         SHELL_CMD(connect, NULL, "connect", xCellSaraConnect),
-        //this command cannot be used because it also powers off the module, use deinit instead
+        //this command is not used at the moment, use deinit instead
         //SHELL_CMD(disconnect, NULL, "disconnect", saraR5_disconnect),   
+        SHELL_SUBCMD_SET_END
+);
+
+SHELL_STATIC_SUBCMD_SET_CREATE(BLE,
+        SHELL_CMD(enable, NULL, "Enable BLE (advertising)", xBleEnableCmd),
+        SHELL_CMD(disable, NULL, "Disable BLE (advertising)", xBleDisableCmd),
+        SHELL_CMD(disconnect, NULL, "Disconnect BLE", xBleDisconnectCmd),
+        SHELL_SUBCMD_SET_END
+);
+
+SHELL_STATIC_SUBCMD_SET_CREATE(NFC,
+        SHELL_CMD(on, NULL, "Enable NFC", xNfcInit),
+        SHELL_CMD(off, NULL, "Disable NFC", xNfcDeinit),
         SHELL_SUBCMD_SET_END
 );
 
@@ -188,6 +236,8 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_modules,
        SHELL_CMD(SARAR5, &SARAR5, "SARAR5 control", NULL),
        SHELL_CMD(MQTT, &MQTT, "MQTT control", NULL),
        SHELL_CMD(MQTTSN, &MQTTSN, "MQTTSN control", NULL),
+       SHELL_CMD(BLE, &BLE, "BLE control", NULL),
+       SHELL_CMD(NFC, &NFC, "NFC control", NULL),
        SHELL_CMD(status,   NULL, "Type u-blox modules status", xModulesCmdTypeStatus),
        SHELL_SUBCMD_SET_END
 );
