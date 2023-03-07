@@ -68,7 +68,7 @@ After installing **nRF Connect SDK** the path of the zephyr folder should be inc
 - [Creating an application](https://www.youtube.com/watch?v=KwJtcPZHV30) 
 
 If nRF Connect SDK has been installed properly you should be able to build the firmware. You can do that by:
-*	**Recommended:** Using VS code and build as a normal project (see Nordic help pages like [this](https://www.youtube.com/watch?v=3yi6kuxgdPg))
+*	**Recommended:** Using VS code and build as a normal project (see Nordic help pages like [this](https://www.youtube.com/watch?v=3yi6kuxgdPg)). In the build configuration you should use the `nrf5340dk_nrf5340_cpuapp` board
 *	Using west commands in a command line (should install west properly and set ZEPHYR_BASE environmental variable to be able to use that):
   Open a command line or powershell in the project’s folder (the one which contains the ubxlib_priv folder and CMakeLists.txt file) and type the following command:
 ```
